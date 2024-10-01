@@ -33,3 +33,6 @@
 
 # mccomp
 mccomp
+
+# LLVM
+*.ll
