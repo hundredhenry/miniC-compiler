@@ -1,72 +1,83 @@
-program ::= extern_list decl_list  |  decl_list
+program -> extern_list decl_list | decl_list
 
-extern_list ::= extern extern_list'
-extern_list' ::= extern extern_list'  |  epsilon
-extern ::= "extern" type_spec IDENT "(" params ")" ";"
+extern_list -> extern extern_list'
+extern_list' -> extern extern_list' | ϵ
+extern -> "extern" type_spec IDENT "(" params ")" ";"
 
-decl_list ::= decl decl_list'
-decl_list' ::= decl decl_list'  |  epsilon
-decl ::= var_decl  |  fun_decl
-var_decl ::= var_type IDENT ";" 
-type_spec ::= "void"  |  var_type           
-var_type  ::= "int" |  "float" |  "bool"
-fun_decl ::= type_spec IDENT "(" params ")" block
+decl_list -> decl decl_list'
+decl_list' -> decl decl_list' | ϵ
+decl -> var_decl | fun_decl
+var_decl -> var_type IDENT ";" 
+type_spec -> "void" | var_type           
+var_type  -> "int" |  "float" |  "bool"
+fun_decl -> "void" IDENT "(" params ")" block
+    | "int" IDENT "(" params ")" block
+    | "float" IDENT "(" params ")" block
+    | "bool" IDENT "(" params ")" block
 
-params ::= param_list | "void" | epsilon
-param_list ::= param param_list'
-param_list' ::= "," param param_list' | epsilon
-param ::= var_type IDENT
+params -> param_list | "void" | ϵ
+param_list -> param param_list'
+param_list' -> "," param param_list' | ϵ
+param -> "int" IDENT
+    | "float" IDENT
+    | "bool" IDENT
 
-block ::= "{" local_decls stmt_list "}"
-local_decls ::= local_decl local_decls'  |  epsilon
-local_decls' ::= local_decl local_decls' |  epsilon
-local_decl ::= var_type IDENT ";"
+block -> "{" local_decls stmt_list "}"
+local_decls -> local_decls'
+local_decls' -> local_decl local_decls' | ϵ
+local_decl -> "int" IDENT ";"
+    | "float" IDENT ";"
+    | "bool" IDENT ";"
 
-stmt_list ::= stmt stmt_list' | epsilon
-stmt_list' ::= stmt stmt_list' | epsilon
-stmt ::= expr_stmt 
-      |  block 
-      |  if_stmt 
-      |  while_stmt 
-      |  return_stmt
-expr_stmt ::= expr ";"  |  ";"
-while_stmt ::= "while" "(" expr ")" stmt 
-if_stmt ::= "if" "(" expr ")" block else_stmt
-else_stmt  ::= "else" block  |  epsilon
-return_stmt ::= "return" ";"  |  "return" expr ";"
+stmt_list -> stmt_list'
+stmt_list' -> stmt stmt_list' | ϵ
+stmt -> expr_stmt | block | if_stmt | while_stmt | return_stmt
+expr_stmt -> expr ";" | ";"
+while_stmt -> "while" "(" expr ")" stmt 
+if_stmt -> "if" "(" expr ")" block else_stmt
+else_stmt -> "else" block | ϵ
+return_stmt -> "return" return_stmt'
+return_stmt' -> ";" | expr ";"
 
-# operators in order of increasing precedence      
-expr ::= assignment
-assignment ::= IDENT "=" assignment  |  logical_or
+expr -> assignment
+assignment -> IDENT "=" expr | logical_or
 
-logical_or ::= logical_and logical_or'
-logical_or' ::= "||" logical_and logical_or'  |  epsilon
-logical_and ::= equality logical_and'
-logical_and' ::= "&&" equality logical_and'  |  epsilon
-equality ::= relational equality'
-equality' ::= "==" relational equality'  |  epsilon
+logical_or -> logical_and logical_or'
+logical_or' -> "||" logical_and logical_or' | ϵ
 
-relational ::= additive relational'
-relational' ::= "<=" additive relational'
-      |  "<" additive relational'
-      |  ">=" additive relational'
-      |  ">" additive relational'
-      |  epsilon
+logical_and -> equality logical_and'
+logical_and' -> "&&" equality logical_and' | ϵ
 
-additive ::= multiplicative additive'
-additive' ::= "+" multiplicative additive'
-      |  "-" multiplicative additive'
-      |  epsilon
-multiplicative ::= unary multiplicative'
-multiplicative' ::= "*" unary multiplicative'
-      |  "/" unary multiplicative'
-      |  "%" unary multiplicative'
-      |  epsilon
+equality -> relational equality'
+equality' -> "==" relational equality' | ϵ
 
-unary ::= "-" unary  |  "!" unary  |  bracketed
-bracketed ::= "(" expr ")"  |  identifier
-identifier ::= IDENT  |  IDENT "(" args ")"  |  literal
-literal ::= INT_LIT  |  FLOAT_LIT  |  BOOL_LIT     
+relational -> additive relational'
+relational' -> "<=" additive relational'
+    | "<" additive relational'
+    | ">=" additive relational'
+    | ">" additive relational'
+    | ϵ
 
-args ::= arg_list  |  epsilon
-arg_list ::= arg_list "," expr  |  expr          
+additive -> multiplicative additive'
+additive' -> "+" multiplicative additive'
+    | "-" multiplicative additive'
+    | ϵ
+
+multiplicative -> unary multiplicative'
+multiplicative' -> "*" unary multiplicative'
+    | "/" unary multiplicative'
+    | ϵ
+
+unary -> "-" bracketed 
+    | "!" bracketed 
+    | bracketed
+    
+bracketed -> "(" expr ")" | reference
+
+reference -> IDENT reference' | literal
+reference' -> ϵ | "(" args ")"
+
+literal -> INT_LIT | FLOAT_LIT | BOOL_LIT     
+
+args -> arg_list | ϵ
+arg_list -> arg_list "," expr | expr

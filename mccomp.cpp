@@ -234,7 +234,7 @@ static TOKEN gettok() {
   if (isdigit(LastChar) || LastChar == '.') { // Number: [0-9]+.
     std::string NumStr;
 
-    if (LastChar == '.') { // Floatingpoint Number: .[0-9]+
+    if (LastChar == '.') { // Floating point Number: .[0-9]+
       do {
         NumStr += LastChar;
         LastChar = getc(pFile);
@@ -250,7 +250,7 @@ static TOKEN gettok() {
         columnNo++;
       } while (isdigit(LastChar));
 
-      if (LastChar == '.') { // Floatingpoint Number: [0-9]+.[0-9]+)
+      if (LastChar == '.') { // Floating point Number: [0-9]+.[0-9]+)
         do {
           NumStr += LastChar;
           LastChar = getc(pFile);
@@ -332,10 +332,10 @@ static TOKEN gettok() {
     }
   }
 
-  if (LastChar == '/') { // could be division or could be the start of a comment
+  if (LastChar == '/') { // Could be division or could be the start of a comment
     LastChar = getc(pFile);
     columnNo++;
-    if (LastChar == '/') { // definitely a comment
+    if (LastChar == '/') { // Definitely a comment
       do {
         LastChar = getc(pFile);
         columnNo++;
@@ -396,7 +396,7 @@ public:
   virtual std::string to_string() const {return "";};
 };
 
-/// IntASTnode - Class for integer literals like 1, 2, 10,
+/// IntASTnode - Class for integer literals like 1, 2, 10.
 class IntASTnode : public ASTnode {
   int Val;
   TOKEN Tok;
@@ -405,12 +405,51 @@ class IntASTnode : public ASTnode {
 public:
   IntASTnode(TOKEN tok, int val) : Val(val), Tok(tok) {}
   virtual Value *codegen() override;
-  // virtual std::string to_string() const override {
-  // return a sting representation of this AST node
-  //};
+  virtual std::string to_string() const override {
+    return "IntASTnode [" + Name + "]: " + std::to_string(Val);
+  };
 };
 
-/* add other AST nodes as nessasary */
+// FloatASTnode - Class for float literals.
+class FloatASTnode : public ASTnode {
+  float Val;
+  TOKEN Tok;
+  std::string Name;
+
+public:
+  FloatASTnode(TOKEN tok, float val) : Val(val), Tok(tok) {}
+  virtual Value *codegen() override;
+  virtual std::string to_string() const override {
+    return "FloatASTnode [" + Name + "]: " + std::to_string(Val);
+  };
+};
+
+// BoolASTnode - Class for boolean literals.
+class BoolASTnode : public ASTnode {
+  bool Val;
+  TOKEN Tok;
+  std::string Name;
+
+public:
+  BoolASTnode(TOKEN tok, bool val) : Val(val), Tok(tok) {}
+  virtual Value *codegen() override;
+  virtual std::string to_string() const override {
+    return "BoolASTnode [" + Name + "]: " + std::to_string(Val);
+  };
+};
+
+// VariableASTnode - Class for variables.
+class VariableASTnode : public ASTnode {
+  std::string Name;
+
+public:
+  VariableASTnode(const std::string &name) : Name(name) {}
+  virtual Value *codegen() override;
+  virtual std::string to_string() const override {
+    return "VariableASTnode [" + Name + "]";
+  };
+};
+
 
 //===----------------------------------------------------------------------===//
 // Recursive Descent Parser - Function call for each production
