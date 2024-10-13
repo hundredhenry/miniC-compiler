@@ -450,6 +450,19 @@ public:
   };
 };
 
+// BinaryASTnode - Class for binary operators.
+class BinaryASTnode : public ASTnode {
+  char Op;
+  std::unique_ptr<ASTnode> LHS, RHS;
+
+public:
+  BinaryASTnode(char op, std::unique_ptr<ASTnode> lhs, std::unique_ptr<ASTnode> rhs): Op(op), LHS(std::move(lhs)), RHS(std::move(rhs)) {}
+  virtual Value *codegen() override;
+  virtual std::string to_string() const override {
+    return "BinaryASTnode [" + std::string(1, Op) + "]";
+  };
+};
+
 
 //===----------------------------------------------------------------------===//
 // Recursive Descent Parser - Function call for each production
