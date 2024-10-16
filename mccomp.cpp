@@ -396,7 +396,7 @@ public:
   virtual std::string to_string() const {return "";};
 };
 
-/// IntASTnode - Class for integer literals like 1, 2, 10.
+/// IntASTnode - Class for integer literals.
 class IntASTnode : public ASTnode {
   int Val;
   TOKEN Tok;
@@ -406,60 +406,7 @@ public:
   IntASTnode(TOKEN tok, int val) : Val(val), Tok(tok) {}
   virtual Value *codegen() override;
   virtual std::string to_string() const override {
-    return "IntASTnode [" + Name + "]: " + std::to_string(Val);
-  };
-};
-
-// FloatASTnode - Class for float literals.
-class FloatASTnode : public ASTnode {
-  float Val;
-  TOKEN Tok;
-  std::string Name;
-
-public:
-  FloatASTnode(TOKEN tok, float val) : Val(val), Tok(tok) {}
-  virtual Value *codegen() override;
-  virtual std::string to_string() const override {
-    return "FloatASTnode [" + Name + "]: " + std::to_string(Val);
-  };
-};
-
-// BoolASTnode - Class for boolean literals.
-class BoolASTnode : public ASTnode {
-  bool Val;
-  TOKEN Tok;
-  std::string Name;
-
-public:
-  BoolASTnode(TOKEN tok, bool val) : Val(val), Tok(tok) {}
-  virtual Value *codegen() override;
-  virtual std::string to_string() const override {
-    return "BoolASTnode [" + Name + "]: " + std::to_string(Val);
-  };
-};
-
-// VariableASTnode - Class for variables.
-class VariableASTnode : public ASTnode {
-  std::string Name;
-
-public:
-  VariableASTnode(const std::string &name) : Name(name) {}
-  virtual Value *codegen() override;
-  virtual std::string to_string() const override {
-    return "VariableASTnode [" + Name + "]";
-  };
-};
-
-// BinaryASTnode - Class for binary operators.
-class BinaryASTnode : public ASTnode {
-  char Op;
-  std::unique_ptr<ASTnode> LHS, RHS;
-
-public:
-  BinaryASTnode(char op, std::unique_ptr<ASTnode> lhs, std::unique_ptr<ASTnode> rhs): Op(op), LHS(std::move(lhs)), RHS(std::move(rhs)) {}
-  virtual Value *codegen() override;
-  virtual std::string to_string() const override {
-    return "BinaryASTnode [" + std::string(1, Op) + "]";
+    return "IntASTnode: " + std::to_string(Val);
   };
 };
 
@@ -469,6 +416,39 @@ public:
 //===----------------------------------------------------------------------===//
 
 /* Add function calls for each production */
+bool p_extern_list(); bool p_extern_listP();
+bool p_extern();
+bool p_decl_list(); bool p_decl_listP();
+bool p_decl();
+bool p_var_decl();
+bool p_fun_decl();
+bool p_params();
+bool p_param_list(); bool p_param_listP();
+bool p_param();
+bool p_block();
+bool p_local_decls(); bool p_local_declsP();
+bool p_local_decl();
+bool p_stmt_list(); bool p_stmt_listP();
+bool p_stmt();
+bool p_expr_stmt();
+bool p_while_stmt();
+bool p_if_stmt();
+bool p_else_stmt();
+bool p_return_stmt(); bool p_return_stmtP();
+bool p_expr();
+bool p_assignment();
+bool p_logical_or(); bool p_logical_orP();
+bool p_logical_and(); bool p_logical_andP();
+bool p_equality(); bool p_equalityP();
+bool p_relational(); bool p_relationalP();
+bool p_additive(); bool p_additiveP();
+bool p_multiplicative(); bool p_multiplicativeP();
+bool p_unary();
+bool p_factor();
+bool p_reference();
+bool p_literal();
+bool p_args();
+bool p_arg_list(); bool p_arg_listP();
 
 // program ::= extern_list decl_list
 static void parser() {

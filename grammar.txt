@@ -68,11 +68,11 @@ multiplicative' -> "*" unary multiplicative'
     | "/" unary multiplicative'
     | ϵ
 
-unary -> "-" bracketed 
-    | "!" bracketed 
-    | bracketed
+unary -> "-" factor
+    | "!" factor
+    | factor
     
-bracketed -> "(" expr ")" | reference
+factor -> "(" expr ")" | reference
 
 reference -> IDENT reference' | literal
 reference' -> ϵ | "(" args ")"
@@ -80,4 +80,5 @@ reference' -> ϵ | "(" args ")"
 literal -> INT_LIT | FLOAT_LIT | BOOL_LIT     
 
 args -> arg_list | ϵ
-arg_list -> arg_list "," expr | expr
+arg_list -> expr arg_list'
+arg_list' -> "," expr arg_list' | ϵ
