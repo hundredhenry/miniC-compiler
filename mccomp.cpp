@@ -385,6 +385,27 @@ static TOKEN getNextToken() {
 static void putBackToken(TOKEN tok) { tok_buffer.push_front(tok); }
 
 //===----------------------------------------------------------------------===//
+// Helper functions
+//===----------------------------------------------------------------------===//
+
+static bool contains(std::vector<TOKEN_TYPE> vec, int tok) {
+  if (std::find(vec.begin(), vec.end(), tok) != vec.end()) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+static bool match(int tok) {
+  if (CurTok.type == tok) {
+    getNextToken();
+    return true;
+  } else {
+    return false;
+  }
+}
+
+//===----------------------------------------------------------------------===//
 // AST nodes
 //===----------------------------------------------------------------------===//
 
@@ -410,20 +431,91 @@ public:
   };
 };
 
+//===----------------------------- -----------------------------------------===//
+// First and Follow sets for each production rule
+//===----------------------------------------------------------------------===//
+
+// First sets of each production
+std::vector<TOKEN_TYPE> first_extern_list = {EXTERN};
+std::vector<TOKEN_TYPE> first_extern_listP = {EXTERN};
+std::vector<TOKEN_TYPE> first_extern = {EXTERN};
+std::vector<TOKEN_TYPE> first_decl_list = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK};
+std::vector<TOKEN_TYPE> first_decl_listP = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK};
+std::vector<TOKEN_TYPE> first_decl = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK};
+std::vector<TOKEN_TYPE> first_type_spec = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK};
+std::vector<TOKEN_TYPE> first_var_type = {BOOL_TOK, FLOAT_TOK, INT_TOK};
+std::vector<TOKEN_TYPE> first_params = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK};
+std::vector<TOKEN_TYPE> first_param_list = {BOOL_TOK, FLOAT_TOK, INT_TOK};
+std::vector<TOKEN_TYPE> first_param_listP = {COMMA};
+std::vector<TOKEN_TYPE> first_param = {BOOL_TOK, FLOAT_TOK, INT_TOK};
+std::vector<TOKEN_TYPE> first_block = {LBRA};
+std::vector<TOKEN_TYPE> first_local_decls = {BOOL_TOK, FLOAT_TOK, INT_TOK};
+std::vector<TOKEN_TYPE> first_local_declsP = {BOOL_TOK, FLOAT_TOK, INT_TOK};
+std::vector<TOKEN_TYPE> first_local_decl = {BOOL_TOK, FLOAT_TOK, INT_TOK};
+std::vector<TOKEN_TYPE> first_stmt_list = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+std::vector<TOKEN_TYPE> first_stmt_listP = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+std::vector<TOKEN_TYPE> first_stmt = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+std::vector<TOKEN_TYPE> first_expr_stmt = {NOT, LPAR, MINUS, SC, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+std::vector<TOKEN_TYPE> first_while_stmt = {WHILE};
+std::vector<TOKEN_TYPE> first_if_stmt = {IF};
+std::vector<TOKEN_TYPE> first_else_stmt = {ELSE};
+std::vector<TOKEN_TYPE> first_return_stmt = {RETURN};
+std::vector<TOKEN_TYPE> first_expr = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+std::vector<TOKEN_TYPE> first_logical_or = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+std::vector<TOKEN_TYPE> first_logical_orP = {OR};
+std::vector<TOKEN_TYPE> first_logical_and = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+std::vector<TOKEN_TYPE> first_logical_andP = {AND};
+std::vector<TOKEN_TYPE> first_equality = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+std::vector<TOKEN_TYPE> first_equalityP = {EQ, NE};
+std::vector<TOKEN_TYPE> first_relational = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+std::vector<TOKEN_TYPE> first_relationalP = {LT, LE, GT, GE};
+std::vector<TOKEN_TYPE> first_additive = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+std::vector<TOKEN_TYPE> first_additiveP = {PLUS, MINUS};
+std::vector<TOKEN_TYPE> first_multiplicative = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+std::vector<TOKEN_TYPE> first_multiplicativeP = {MOD, ASTERIX, DIV};
+std::vector<TOKEN_TYPE> first_factor = {LPAR, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+std::vector<TOKEN_TYPE> first_reference = {BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+std::vector<TOKEN_TYPE> first_referenceP = {LPAR};
+std::vector<TOKEN_TYPE> first_literal = {BOOL_LIT, FLOAT_LIT, INT_LIT};
+std::vector<TOKEN_TYPE> first_args = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+std::vector<TOKEN_TYPE> first_arg_list = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+std::vector<TOKEN_TYPE> first_arg_listP = {COMMA};
+
+// Follow sets of each production
+std::vector<TOKEN_TYPE> follow_extern_listP = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK};
+std::vector<TOKEN_TYPE> follow_decl_listP = {EOF_TOK};
+std::vector<TOKEN_TYPE> follow_decl = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK, EOF_TOK};
+std::vector<TOKEN_TYPE> follow_params = {RPAR};
+std::vector<TOKEN_TYPE> follow_param_listP = {RPAR};
+std::vector<TOKEN_TYPE> follow_local_decls = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+std::vector<TOKEN_TYPE> follow_local_declsP = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+std::vector<TOKEN_TYPE> follow_stmt_list = {RBRA};
+std::vector<TOKEN_TYPE> follow_stmt_listP = {RBRA};
+std::vector<TOKEN_TYPE> follow_expr_stmt = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+std::vector<TOKEN_TYPE> follow_else_stmt = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+std::vector<TOKEN_TYPE> follow_expr = {RPAR, COMMA, SC};
+std::vector<TOKEN_TYPE> follow_logical_or = {RPAR, COMMA, SC};
+std::vector<TOKEN_TYPE> follow_logical_orP = {RPAR, COMMA, SC};
+std::vector<TOKEN_TYPE> follow_logical_andP = {RPAR, COMMA, SC, OR};
+std::vector<TOKEN_TYPE> follow_equalityP = {AND, RPAR, COMMA, SC, OR};
+std::vector<TOKEN_TYPE> follow_relationalP = {NE, AND, RPAR, COMMA, SC, EQ, OR};
+std::vector<TOKEN_TYPE> follow_additiveP = {NE, AND, RPAR, COMMA, SC, LT, LE, EQ, GT, GE, OR};
+std::vector<TOKEN_TYPE> follow_multiplicativeP = {NE, AND, RPAR, PLUS, MINUS, SC, LT, LE, EQ, GT, GE, OR};
+std::vector<TOKEN_TYPE> follow_referenceP = {NE, MOD, AND, RPAR, ASTERIX, PLUS, COMMA, MINUS, DIV, SC, LT, LE, EQ, GT, GE, OR};
+std::vector<TOKEN_TYPE> follow_args = {RPAR};
+std::vector<TOKEN_TYPE> follow_arg_listP = {RPAR};
 
 //===----------------------------------------------------------------------===//
 // Recursive Descent Parser - Function call for each production
 //===----------------------------------------------------------------------===//
 
-/* Add function calls for each production */
+// Define functions for each production
 bool p_extern_list(); bool p_extern_listP();
 bool p_extern();
 bool p_decl_list(); bool p_decl_listP();
 bool p_decl();
-bool p_var_decl();
 bool p_type_spec();
 bool p_var_type();
-bool p_fun_decl();
 bool p_params();
 bool p_param_list(); bool p_param_listP();
 bool p_param();
@@ -436,9 +528,8 @@ bool p_expr_stmt();
 bool p_while_stmt();
 bool p_if_stmt();
 bool p_else_stmt();
-bool p_return_stmt(); bool p_return_stmtP();
+bool p_return_stmt();
 bool p_expr();
-bool p_assignment();
 bool p_logical_or(); bool p_logical_orP();
 bool p_logical_and(); bool p_logical_andP();
 bool p_equality(); bool p_equalityP();
@@ -452,107 +543,427 @@ bool p_literal();
 bool p_args();
 bool p_arg_list(); bool p_arg_listP();
 
-/* First sets of each production */
-TOKEN_TYPE first_extern_list[] = {EXTERN};
-TOKEN_TYPE first_decl_list[] = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK};
-TOKEN_TYPE first_decl_listP[] = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK};
-TOKEN_TYPE first_decl[] = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK};
-TOKEN_TYPE first_var_decl[] = {BOOL_TOK, FLOAT_TOK, INT_TOK};
-TOKEN_TYPE first_type_spec[] = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK};
-TOKEN_TYPE first_var_type[] = {BOOL_TOK, FLOAT_TOK, INT_TOK};
-TOKEN_TYPE first_fun_decl[] = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK};
-TOKEN_TYPE first_params[] = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK};
-TOKEN_TYPE first_param_list[] = {BOOL_TOK, FLOAT_TOK, INT_TOK};
-TOKEN_TYPE first_param_listP[] = {COMMA};
-TOKEN_TYPE first_param[] = {BOOL_TOK, FLOAT_TOK, INT_TOK};
-TOKEN_TYPE first_block[] = {LBRA};
-TOKEN_TYPE first_local_decls[] = {BOOL_TOK, FLOAT_TOK, INT_TOK};
-TOKEN_TYPE first_local_declsP[] = {BOOL_TOK, FLOAT_TOK, INT_TOK};
-TOKEN_TYPE first_local_decl[] = {BOOL_TOK, FLOAT_TOK, INT_TOK};
-TOKEN_TYPE first_stmt_list[] = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE first_stmt_listP[] = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE first_stmt[] = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE first_expr_stmt[] = {NOT, LPAR, MINUS, SC, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE first_while_stmt[] = {WHILE};
-TOKEN_TYPE first_if_stmt[] = {IF};
-TOKEN_TYPE first_else_stmt[] = {ELSE};
-TOKEN_TYPE first_return_stmt[] = {RETURN};
-TOKEN_TYPE first_return_stmtP[] = {NOT, LPAR, MINUS, SC, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE first_expr[] = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE first_logical_or[] = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE first_logical_orP[] = {OR};
-TOKEN_TYPE first_logical_and[] = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE first_logical_andP[] = {AND};
-TOKEN_TYPE first_equality[] = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE first_equalityP[] = {EQ, NE};
-TOKEN_TYPE first_relational[] = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE first_relationalP[] = {LT, LE, GT, GE};
-TOKEN_TYPE first_additive[] = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE first_additiveP[] = {PLUS, MINUS};
-TOKEN_TYPE first_multiplicative[] = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE first_multiplicativeP[] = {MOD, ASTERIX, DIV};
-TOKEN_TYPE first_factor[] = {LPAR, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE first_reference[] = {BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE first_referenceP[] = {LPAR};
-TOKEN_TYPE first_literal[] = {BOOL_LIT, FLOAT_LIT, INT_LIT};
-TOKEN_TYPE first_args[] = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE first_arg_list[] = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE first_arg_listP[] = {COMMA};
+// arg_list' -> "," expr arg_list' | ϵ
+bool p_arg_listP() {
+  if (match(COMMA)) {
+    return p_expr() && p_arg_listP();
+  } else if (contains(follow_arg_listP, CurTok.type)) {
+    return true;
+  } else {
+    return false;
+  }
+}
 
-/* Follow sets of each production */
-TOKEN_TYPE follow_extern_list[] = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK};
-TOKEN_TYPE follow_extern_listP[] = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK};
-TOKEN_TYPE follow_extern[] = {BOOL_TOK, EXTERN, FLOAT_TOK, INT_TOK, VOID_TOK};
-TOKEN_TYPE follow_decl_list[] = {EOF_TOK};
-TOKEN_TYPE follow_decl_listP[] = {EOF_TOK};
-TOKEN_TYPE follow_decl[] = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK, EOF_TOK};
-TOKEN_TYPE follow_var_decl[] = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK, EOF_TOK};
-TOKEN_TYPE follow_type_spec[] = {IDENT};
-TOKEN_TYPE follow_var_type[] = {IDENT};
-TOKEN_TYPE follow_fun_decl[] = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK, EOF_TOK};
-TOKEN_TYPE follow_params[] = {RPAR};
-TOKEN_TYPE follow_param_list[] = {RPAR};
-TOKEN_TYPE follow_param_listP[] = {RPAR};
-TOKEN_TYPE follow_param[] = {RPAR, COMMA};
-TOKEN_TYPE follow_block[] = {NOT, LPAR, MINUS, SC, BOOL_TOK, ELSE, FLOAT_TOK, IF, INT_TOK, RETURN, VOID_TOK, WHILE, LBRA, RBRA, 
-                            EOF_TOK, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE follow_local_decls[] = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE follow_local_declsP[] = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE follow_local_decl[] = {NOT, LPAR, MINUS, SC, BOOL_TOK, FLOAT_TOK, IF, INT_TOK, RETURN, WHILE, LBRA, RBRA, BOOL_LIT, 
-                                 FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE follow_stmt_list[] = {RBRA};
-TOKEN_TYPE follow_stmt_listP[] = {RBRA};
-TOKEN_TYPE follow_stmt[] = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE follow_expr_stmt[] = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE follow_while_stmt[] = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE follow_if_stmt[] = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE follow_else_stmt[] = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE follow_return_stmt[] = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE follow_return_stmtP[] = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-TOKEN_TYPE follow_expr[] = {RPAR, COMMA, SC};
-TOKEN_TYPE follow_logical_or[] = {RPAR, COMMA, SC};
-TOKEN_TYPE follow_logical_orP[] = {RPAR, COMMA, SC};
-TOKEN_TYPE follow_logical_and[] = {RPAR, COMMA, SC, OR};
-TOKEN_TYPE follow_logical_andP[] = {RPAR, COMMA, SC, OR};
-TOKEN_TYPE follow_equality[] = {AND, RPAR, COMMA, SC, OR};
-TOKEN_TYPE follow_equalityP[] = {AND, RPAR, COMMA, SC, OR};
-TOKEN_TYPE follow_relational[] = {NE, AND, RPAR, COMMA, SC, EQ, OR};
-TOKEN_TYPE follow_relationalP[] = {NE, AND, RPAR, COMMA, SC, EQ, OR};
-TOKEN_TYPE follow_additive[] = {NE, AND, RPAR, COMMA, SC, LT, LE, EQ, GT, GE, OR};
-TOKEN_TYPE follow_additiveP[] = {NE, AND, RPAR, COMMA, SC, LT, LE, EQ, GT, GE, OR};
-TOKEN_TYPE follow_multiplicative[] = {NE, AND, RPAR, PLUS, MINUS, SC, LT, LE, EQ, GT, GE, OR};
-TOKEN_TYPE follow_multiplicativeP[] = {NE, AND, RPAR, PLUS, MINUS, SC, LT, LE, EQ, GT, GE, OR};
-TOKEN_TYPE follow_factor[] = {NE, MOD, AND, RPAR, ASTERIX, PLUS, MINUS, DIV, SC, LT, LE, EQ, GT, GE, OR};
-TOKEN_TYPE follow_reference[] = {NE, MOD, AND, RPAR, ASTERIX, PLUS, COMMA, MINUS, DIV, SC, LT, LE, EQ, GT, GE, OR};
-TOKEN_TYPE follow_referenceP[] = {NE, MOD, AND, RPAR, ASTERIX, PLUS, COMMA, MINUS, DIV, SC, LT, LE, EQ, GT, GE, OR};
-TOKEN_TYPE follow_literal[] = {NE, MOD, AND, RPAR, ASTERIX, PLUS, COMMA, MINUS, DIV, SC, LT, LE, EQ, GT, GE, OR};
-TOKEN_TYPE follow_args[] = {RPAR};
-TOKEN_TYPE follow_arg_list[] = {RPAR};
-TOKEN_TYPE follow_arg_listP[] = {RPAR};
+// arg_list -> expr arg_list'
+bool p_arg_list() {
+  return p_expr() && p_arg_listP();
+}
 
-// program ::= extern_list decl_list
+// args -> arg_list | ϵ
+bool p_args() {
+  if (contains(first_args, CurTok.type)) {
+    return p_arg_list();
+  } else if (contains(follow_args, CurTok.type)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+// literal -> INT_LIT | FLOAT_LIT | BOOL_LIT
+bool p_literal() {
+  if (match(INT_LIT) || match(FLOAT_LIT) || match(BOOL_LIT)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+// reference' -> "(" args ")" | ϵ
+bool p_referenceP() {
+  if (match(LPAR)) {
+    return p_args() && match(RPAR);
+  } else if (contains(follow_referenceP, CurTok.type)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+// reference -> IDENT reference' | literal
+bool p_reference() {
+  if (match(IDENT)) {
+    return p_referenceP();
+  } else if (contains(first_literal, CurTok.type)) {
+    return p_literal();
+  } else {
+    return false;
+  }
+}
+
+// factor -> "(" expr ")" | reference
+bool p_factor() {
+  if (match(LPAR)) {
+    return p_expr() && match(RPAR);
+  } else if (contains(first_reference, CurTok.type)) {
+    return p_reference();
+  } else {
+    return false;
+  }
+}
+
+// unary -> "-" unary | "!" unary | factor
+bool p_unary() {
+  if (match(MINUS) || match(NOT)) {
+    return p_unary();
+  } else if (contains(first_factor, CurTok.type)) {
+    return p_factor();
+  } else {
+    return false;
+  }
+}
+
+// multiplicative' -> "*" unary multiplicative' | "/" unary multiplicative' | "%" unary multiplicative' | ϵ
+bool p_multiplicativeP() {
+  if (match(ASTERIX) || match(DIV) || match(MOD)) {
+    return p_unary() && p_multiplicativeP();
+  } else if (contains(follow_multiplicativeP, CurTok.type)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+// multiplicative -> unary multiplicative'
+bool p_multiplicative() {
+  return p_unary() && p_multiplicativeP();
+}
+
+// additive' -> "+" multiplicative additive' | "-" multiplicative additive' | ϵ
+bool p_additiveP() {
+  if (match(PLUS) || match(MINUS)) {
+    return p_multiplicative() && p_additiveP();
+  } else if (contains(follow_additiveP, CurTok.type)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+// additive -> multiplicative additive'
+bool p_additive() {
+  return p_multiplicative() && p_additiveP();
+}
+
+// relational' -> "<=" additive relational' | "<" additive relational' | ">=" additive relational' | ">" additive relational' | ϵ
+bool p_relationalP() {
+
+  if (match(LE) || match(LT) || match(GE) || match(GT)) {
+    return p_additive() && p_relationalP();
+  } else if (contains(follow_relationalP, CurTok.type)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+// relational -> additive relational'
+bool p_relational() {
+  return p_additive() && p_relationalP();
+}
+
+// equality' -> "==" relational equality' | "!=" relational equality' | ϵ
+bool p_equalityP() {
+  if (match(EQ) || match(NE)) {
+    return p_relational() && p_equalityP();
+  } else if (contains(follow_equalityP, CurTok.type)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+// equality -> relational equality'
+bool p_equality() {
+  return p_relational() && p_equalityP();
+}
+
+// logical_and' -> "&&" equality logical_and' | ϵ
+bool p_logical_andP() {
+  if (match(AND)) {
+    return p_equality() && p_logical_andP();
+  } else if (contains(follow_logical_andP, CurTok.type)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+// logical_and -> equality logical_and'
+bool p_logical_and() {
+  return p_equality() && p_logical_andP();
+}
+
+// logical_or' -> "||" logical_and logical_or' | ϵ
+bool p_logical_orP() {
+  if (match(OR)) {
+    return p_logical_and() && p_logical_orP();
+  } else if (contains(follow_logical_orP, CurTok.type)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+// logical_or -> logical_and logical_or'
+bool p_logical_or() {
+  return p_logical_and() && p_logical_orP();
+}
+
+// expr -> IDENT "=" expr | logical_or
+bool p_expr() {
+  TOKEN temp = CurTok;
+  getNextToken();
+
+  if (temp.type == IDENT && match(ASSIGN)) {
+    return p_expr();
+  } else if (contains(first_logical_or, temp.type)) {
+    putBackToken(CurTok);
+    CurTok = temp;
+    return p_logical_or();
+  } else {
+    return false;
+  }
+}
+
+// return_stmt -> "return" expr_stmt
+bool p_return_stmt() {
+  return match(RETURN) && p_expr_stmt();
+}
+
+// else_stmt -> "else" block | ϵ
+bool p_else_stmt() {
+  if (match(ELSE)) {
+    return p_block();
+  } else if (contains(follow_else_stmt, CurTok.type)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+// if_stmt -> "if" "(" expr ")" stmt else_stmt
+bool p_if_stmt() {
+  return match(IF) && match(LPAR) && p_expr() && match(RPAR) && p_block() && p_else_stmt();
+}
+
+// while_stmt -> "while" "(" expr ")" stmt
+bool p_while_stmt() {
+  return match(WHILE) && match(LPAR) && p_expr() && match(RPAR) && p_stmt();
+}
+
+// expr_stmt -> expr ";" | ";"
+bool p_expr_stmt() {
+  if (contains(first_expr, CurTok.type)) {
+    return p_expr() && match(SC);
+  } else if (match(SC)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+// stmt -> expr_stmt | block | if_stmt | while_stmt | return_stmt
+bool p_stmt() {
+  if (contains(first_expr_stmt, CurTok.type)) {
+    return p_expr_stmt();
+  } else if (contains(first_block, CurTok.type)) {
+    return p_block();
+  } else if (contains(first_if_stmt, CurTok.type)) {
+    return p_if_stmt();
+  } else if (contains(first_while_stmt, CurTok.type)) {
+    return p_while_stmt();
+  } else if (contains(first_return_stmt, CurTok.type)) {
+    return p_return_stmt();
+  } else {
+    return false;
+  }
+}
+
+// stmt_list' -> stmt stmt_list' | ϵ
+bool p_stmt_listP() {
+  if (contains(first_stmt, CurTok.type)) {
+    return p_stmt() && p_stmt_listP();
+  } else if (contains(follow_stmt_listP, CurTok.type)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+// stmt_list -> stmt stmt_list'
+bool p_stmt_list() {
+  return p_stmt() && p_stmt_listP();
+}
+
+// local_decl -> var_type IDENT ";"
+bool p_local_decl() {
+  return p_var_type() && match(IDENT) && match(SC);
+}
+
+// local_decls' -> local_decl local_decls' | ϵ
+bool p_local_declsP() {
+  if (contains(first_local_decl, CurTok.type)) {
+    return p_local_decl() && p_local_declsP();
+  } else if (contains(follow_local_declsP, CurTok.type)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+// local_decls -> local_decls'
+bool p_local_decls() {
+  return p_local_declsP();
+}
+
+// block -> "{" local_decls stmt_list "}"
+bool p_block() {
+  return match(LBRA) && p_local_decls() && p_stmt_list() && match(RBRA);
+}
+
+// param -> var_type IDENT
+bool p_param() {
+  return p_var_type() && match(IDENT);
+}
+
+// param_list' -> "," param param_list' | ϵ
+bool p_param_listP() {
+  if (match(COMMA)) {
+    return p_param() && p_param_listP();
+  } else if (contains(follow_param_listP, CurTok.type)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+// param_list -> param param_list'
+bool p_param_list() {
+  return p_param() && p_param_listP();
+}
+
+// params -> param_list | "void" | ϵ
+bool p_params() {
+  if (contains(first_param_list, CurTok.type)) {
+    return p_param_list();
+  } else if (match(VOID_TOK)) {
+    return true;
+  } else if (contains(follow_params, CurTok.type)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+// var_type -> "int" | "float" | "bool"
+bool p_var_type() {
+  if (match(INT_TOK) || match(FLOAT_TOK) || match(BOOL_TOK)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+// type_spec -> var_type | "void"
+bool p_type_spec() {
+  if (contains(first_var_type, CurTok.type)) {
+    return p_var_type();
+  } else if (match(VOID_TOK)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+// decl -> var_type IDENT ";" | type_spec IDENT "(" params ")" block
+// This is messy
+bool p_decl() {
+  if (contains(first_var_type, CurTok.type)) { // Will be "int", "float", or "bool"
+    if (!p_var_type() || !match(IDENT)) {
+      return false;
+    }
+
+    if (match(SC)) {
+      return true;
+    } else if (match(LPAR) && p_params() && match(RPAR) && p_block()) {
+      return true;
+    } else {
+      return false;
+    }
+  } else if (contains(first_type_spec, CurTok.type)) { // Will only be "void"
+    return p_type_spec() && match(IDENT) && match(LPAR) && p_params() && match(RPAR) && p_block();
+  } else {
+    return false;
+  }
+}
+
+// decl_list' -> decl decl_list' | ϵ
+bool p_decl_listP() {
+  if (contains(first_decl, CurTok.type)) {
+    return p_decl() && p_decl_listP();
+  } else if (contains(follow_decl_listP, CurTok.type)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+// decl_list -> decl decl_list'
+bool p_decl_list() {
+  return p_decl() && p_decl_listP();
+}
+
+// extern -> "extern" type_spec IDENT "(" params ")" ";"
+bool p_extern() {
+  return match(EXTERN) && p_type_spec() && match(IDENT) && match(LPAR) && p_params() && match(RPAR) && match(SC);
+}
+
+// extern_list' -> extern extern_list' | ϵ
+bool p_extern_listP() {
+  if (contains(first_extern, CurTok.type)) {
+    return p_extern() && p_extern_listP();
+  } else if (contains(follow_extern_listP, CurTok.type)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+// extern_list -> extern extern_list'
+bool p_extern_list() {
+  return p_extern() && p_extern_listP();
+}
+
+// program -> extern_list decl_list | decl_list
+bool p_program() {
+  if (contains(first_extern_list, CurTok.type)) {
+    return p_extern_list() && p_decl_list();
+  } else if (contains(first_decl_list, CurTok.type)) {
+    return p_decl_list();
+  } else {
+    return false;
+  }
+}
+
 static void parser() {
-  // add body
+  getNextToken(); // Consume EOF
+
+  if (p_program() && CurTok.type == EOF_TOK) {
+    fprintf(stderr, "Parsing Successful\n");
+  } else {
+    fprintf(stderr, "Parsing Failed\n");
+  }
 }
 
 //===----------------------------------------------------------------------===//
@@ -592,17 +1003,19 @@ int main(int argc, char **argv) {
   columnNo = 1;
 
   // get the first token
-  getNextToken();
-  while (CurTok.type != EOF_TOK) {
-    fprintf(stderr, "Token: %s with type %d\n", CurTok.lexeme.c_str(),
-            CurTok.type);
-    getNextToken();
-  }
-  fprintf(stderr, "Lexer Finished\n");
+  //getNextToken();
+  //while (CurTok.type != EOF_TOK) {
+  //  fprintf(stderr, "Token: %s with type %d\n", CurTok.lexeme.c_str(),
+  //          CurTok.type);
+  //  getNextToken();
+  //}
+  //fprintf(stderr, "Lexer Finished\n");
 
   // Make the module, which holds all the code.
   TheModule = std::make_unique<Module>("mini-c", TheContext);
 
+  // Reset the file pointer to the beginning of the file
+  
   // Run the parser now.
   parser();
   fprintf(stderr, "Parsing Finished\n");

@@ -6,28 +6,19 @@ extern -> "extern" type_spec IDENT "(" params ")" ";"
 
 decl_list -> decl decl_list'
 decl_list' -> decl decl_list' | ϵ
-decl -> var_decl | fun_decl
-var_decl -> var_type IDENT ";" 
-type_spec -> "void" | var_type
+decl -> var_type IDENT ";" | type_spec IDENT "(" params ")" block
+type_spec -> var_type | "void"
 var_type  -> "int" |  "float" |  "bool"
-fun_decl -> "void" IDENT "(" params ")" block
-    | "int" IDENT "(" params ")" block
-    | "float" IDENT "(" params ")" block
-    | "bool" IDENT "(" params ")" block
 
 params -> param_list | "void" | ϵ
 param_list -> param param_list'
 param_list' -> "," param param_list' | ϵ
-param -> "int" IDENT
-    | "float" IDENT
-    | "bool" IDENT
+param -> var_type IDENT
 
 block -> "{" local_decls stmt_list "}"
 local_decls -> local_decls'
 local_decls' -> local_decl local_decls' | ϵ
-local_decl -> "int" IDENT ";"
-    | "float" IDENT ";"
-    | "bool" IDENT ";"
+local_decl -> var_type IDENT ";"
 
 stmt_list -> stmt_list'
 stmt_list' -> stmt stmt_list' | ϵ
@@ -36,8 +27,7 @@ expr_stmt -> expr ";" | ";"
 while_stmt -> "while" "(" expr ")" stmt 
 if_stmt -> "if" "(" expr ")" block else_stmt
 else_stmt -> "else" block | ϵ
-return_stmt -> "return" return_stmt'
-return_stmt' -> ";" | expr ";"
+return_stmt -> "return" expr_stmt
 
 expr -> IDENT "=" expr | logical_or
 
@@ -70,8 +60,8 @@ multiplicative' -> "*" unary multiplicative'
     | "%" unary multiplicative'
     | ϵ
 
-unary -> "-" factor
-    | "!" factor
+unary -> "-" unary
+    | "!" unary
     | factor
     
 factor -> "(" expr ")" | reference
@@ -79,7 +69,7 @@ factor -> "(" expr ")" | reference
 reference -> IDENT reference' | literal
 reference' -> "(" args ")" | ϵ
 
-literal -> INT_LIT | FLOAT_LIT | BOOL_LIT     
+literal -> INT_LIT | FLOAT_LIT | BOOL_LIT
 
 args -> arg_list | ϵ
 arg_list -> expr arg_list'
