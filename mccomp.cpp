@@ -491,7 +491,7 @@ class UnaryASTNode : public ASTNode {
 
 public:
   UnaryASTNode(TOKEN tok, int op, unique_ptr<ASTNode> operand)
-      : Tok(tok), Op(op), Operand(move(operand)) {}
+      : Tok(tok), Op(op), Operand(std::move(operand)) {}
   virtual Value *codegen() override;
   virtual string to_string() const override {
     return "UnaryASTNode: " + ::to_string(Op);
@@ -507,7 +507,7 @@ class BinaryASTNode : public ASTNode {
 public:
   BinaryASTNode(TOKEN tok, int op, unique_ptr<ASTNode> lhs,
                 unique_ptr<ASTNode> rhs)
-      : Tok(tok), Op(op), LHS(move(lhs)), RHS(move(rhs)) {}
+      : Tok(tok), Op(op), LHS(std::move(lhs)), RHS(std::move(rhs)) {}
   virtual Value *codegen() override;
   virtual string to_string() const override {
     return "BinaryASTNode: " + ::to_string(Op);
@@ -522,7 +522,7 @@ class CallASTNode : public ASTNode {
 
 public:
   CallASTNode(TOKEN tok, const string &func, vector<unique_ptr<ASTNode>> args)
-      : Tok(tok), Func(func), Args(move(args)) {}
+      : Tok(tok), Func(func), Args(std::move(args)) {}
   virtual Value *codegen() override;
   virtual string to_string() const override { return "CallASTNode: " + Func; };
 };
@@ -535,7 +535,7 @@ class BlockASTNode : public ASTNode {
 public:
   BlockASTNode(vector<unique_ptr<VarASTNode>> localDecls,
                vector<unique_ptr<ASTNode>> stmtList)
-      : LocalDecls(move(localDecls)), StmtList(move(stmtList)) {}
+      : LocalDecls(std::move(localDecls)), StmtList(std::move(stmtList)) {}
   virtual Value *codegen() override;
   virtual string to_string() const override { return "BlockASTNode"; };
 };
@@ -549,7 +549,8 @@ class IfASTNode : public ASTNode {
 public:
   IfASTNode(TOKEN tok, unique_ptr<ASTNode> cond, unique_ptr<BlockASTNode> then,
             unique_ptr<BlockASTNode> els)
-      : Tok(tok), Cond(move(cond)), Then(move(then)), Else(move(els)) {}
+      : Tok(tok), Cond(std::move(cond)), Then(std::move(then)),
+        Else(std::move(els)) {}
   virtual Value *codegen() override;
   virtual string to_string() const override { return "IfASTNode"; };
 };
@@ -562,7 +563,7 @@ class WhileASTNode : public ASTNode {
 
 public:
   WhileASTNode(TOKEN tok, unique_ptr<ASTNode> cond, unique_ptr<ASTNode> stmt)
-      : Tok(tok), Cond(move(cond)), Stmt(move(stmt)) {}
+      : Tok(tok), Cond(std::move(cond)), Stmt(std::move(stmt)) {}
   virtual Value *codegen() override;
   virtual string to_string() const override { return "WhileASTNode"; };
 };
@@ -574,7 +575,7 @@ class ReturnASTNode : public ASTNode {
 
 public:
   ReturnASTNode(TOKEN tok, unique_ptr<ASTNode> expr)
-      : Tok(tok), Expr(move(expr)) {}
+      : Tok(tok), Expr(std::move(expr)) {}
   virtual Value *codegen() override;
   virtual string to_string() const override { return "ReturnASTNode"; };
 };
@@ -586,7 +587,7 @@ class ExternASTNode : public ASTNode {
 
 public:
   ExternASTNode(const string &name, vector<unique_ptr<VarASTNode>> args)
-      : Name(name), Args(move(args)) {}
+      : Name(name), Args(std::move(args)) {}
   virtual Value *codegen() override;
   virtual string to_string() const override {
     return "ExternASTNode: " + Name;
@@ -604,7 +605,7 @@ public:
   FunctionASTNode(int type, const string &name,
                   vector<unique_ptr<VarASTNode>> args,
                   unique_ptr<BlockASTNode> body)
-      : Type(type), Name(name), Args(move(args)), Body(move(body)) {}
+      : Type(type), Name(name), Args(std::move(args)), Body(std::move(body)) {}
   virtual Value *codegen() override;
   virtual string to_string() const override {
     return "FunctionASTNode: " + Name;
@@ -619,7 +620,7 @@ class ProgramASTNode : public ASTNode {
 public:
   ProgramASTNode(vector<unique_ptr<ExternASTNode>> externs,
                  vector<unique_ptr<ASTNode>> decls)
-      : Externs(move(externs)), Decls(move(decls)) {}
+      : Externs(std::move(externs)), Decls(std::move(decls)) {}
   virtual Value *codegen() override;
   virtual string to_string() const override { return "ProgramASTNode"; };
 };
@@ -740,11 +741,59 @@ const vector<TOKEN_TYPE> follow_arg_listP = {RPAR};
 // Recursive Descent Parser - Function call for each production
 //===----------------------------------------------------------------------===//
 
+// Function prototypes
+vector<unique_ptr<ASTNode>> p_arg_listP(vector<unique_ptr<ASTNode>> &arg_list);
+vector<unique_ptr<ASTNode>> p_arg_list();
+vector<unique_ptr<ASTNode>> p_args();
+unique_ptr<ASTNode> p_literal();
+vector<unique_ptr<ASTNode>> p_referenceP();
+unique_ptr<ASTNode> p_reference();
+unique_ptr<ASTNode> p_factor();
+unique_ptr<ASTNode> p_unary();
+unique_ptr<ASTNode> p_multiplicativeP(unique_ptr<ASTNode> lhs);
+unique_ptr<ASTNode> p_multiplicative();
+unique_ptr<ASTNode> p_additiveP(unique_ptr<ASTNode> lhs);
+unique_ptr<ASTNode> p_additive();
+unique_ptr<ASTNode> p_relationalP(unique_ptr<ASTNode> lhs);
+unique_ptr<ASTNode> p_relational();
+unique_ptr<ASTNode> p_equalityP(unique_ptr<ASTNode> lhs);
+unique_ptr<ASTNode> p_equality();
+unique_ptr<ASTNode> p_logical_andP(unique_ptr<ASTNode> lhs);
+unique_ptr<ASTNode> p_logical_and();
+unique_ptr<ASTNode> p_logical_orP(unique_ptr<ASTNode> lhs);
+unique_ptr<ASTNode> p_logical_or();
+unique_ptr<ASTNode> p_expr();
+unique_ptr<ASTNode> p_return_stmt();
+unique_ptr<BlockASTNode> p_else_stmt();
+unique_ptr<ASTNode> p_if_stmt();
+unique_ptr<ASTNode> p_while_stmt();
+unique_ptr<ASTNode> p_expr_stmt();
+unique_ptr<ASTNode> p_stmt();
+vector<unique_ptr<ASTNode>> p_stmt_listP(vector<unique_ptr<ASTNode>> &stmt_list);
+vector<unique_ptr<ASTNode>> p_stmt_list();
+unique_ptr<VarASTNode> p_local_decl();
+vector<unique_ptr<VarASTNode>> p_local_declsP(vector<unique_ptr<VarASTNode>> &local_decls);
+vector<unique_ptr<VarASTNode>> p_local_decls();
+unique_ptr<BlockASTNode> p_block();
+unique_ptr<VarASTNode> p_param();
+vector<unique_ptr<VarASTNode>> p_param_listP(vector<unique_ptr<VarASTNode>> &param_list);
+vector<unique_ptr<VarASTNode>> p_param_list();
+vector<unique_ptr<VarASTNode>> p_params();
+int p_var_type();
+int p_type_spec();
+unique_ptr<ASTNode> p_decl();
+vector<unique_ptr<ASTNode>> p_decl_listP(vector<unique_ptr<ASTNode>> &decl_list);
+vector<unique_ptr<ASTNode>> p_decl_list();
+unique_ptr<ExternASTNode> p_extern();
+vector<unique_ptr<ExternASTNode>> p_extern_listP(vector<unique_ptr<ExternASTNode>> &extern_list);
+vector<unique_ptr<ExternASTNode>> p_extern_list();
+unique_ptr<ProgramASTNode> p_program();
+
 // arg_list' -> "," expr arg_list' | ϵ
 vector<unique_ptr<ASTNode>> p_arg_listP(vector<unique_ptr<ASTNode>> &arg_list) {
   if (!match(COMMA)) {
     if (contains(follow_arg_listP, CurTok.type)) {
-      return arg_list;
+      return std::move(arg_list);
     } else {
       return {}; // Error
     }
@@ -753,7 +802,7 @@ vector<unique_ptr<ASTNode>> p_arg_listP(vector<unique_ptr<ASTNode>> &arg_list) {
   if (!expr) {
     return {}; // Error
   }
-  arg_list.push_back(move(expr));
+  arg_list.push_back(std::move(expr));
 
   return p_arg_listP(arg_list);
 }
@@ -765,7 +814,7 @@ vector<unique_ptr<ASTNode>> p_arg_list() {
   if (!expr) {
     return {}; // Error
   }
-  arg_list.push_back(move(expr));
+  arg_list.push_back(std::move(expr));
 
   return p_arg_listP(arg_list);
 }
@@ -827,7 +876,7 @@ unique_ptr<ASTNode> p_reference() {
   }
   vector<unique_ptr<ASTNode>> args = p_referenceP();
 
-  return make_unique<CallASTNode>(func, func.lexeme, move(args));
+  return make_unique<CallASTNode>(func, func.lexeme, std::move(args));
 }
 
 // factor -> "(" expr ")" | reference
@@ -876,9 +925,9 @@ unique_ptr<ASTNode> p_multiplicativeP(unique_ptr<ASTNode> lhs) {
     }
   }
   unique_ptr<BinaryASTNode> multiplicativeExpr = make_unique<BinaryASTNode>(
-      multiplicativeOp, multiplicativeOp.type, move(lhs), p_unary());
+      multiplicativeOp, multiplicativeOp.type, std::move(lhs), p_unary());
 
-  return p_multiplicativeP(move(multiplicativeExpr));
+  return p_multiplicativeP(std::move(multiplicativeExpr));
 }
 
 // multiplicative -> unary multiplicative'
@@ -888,7 +937,7 @@ unique_ptr<ASTNode> p_multiplicative() {
     return nullptr; // Error
   }
 
-  return p_multiplicativeP(move(unary));
+  return p_multiplicativeP(std::move(unary));
 }
 
 // additive' -> "+" multiplicative additive' | "-" multiplicative additive' | ϵ
@@ -902,9 +951,9 @@ unique_ptr<ASTNode> p_additiveP(unique_ptr<ASTNode> lhs) {
     }
   }
   unique_ptr<BinaryASTNode> additiveExpr = make_unique<BinaryASTNode>(
-      additiveOp, additiveOp.type, move(lhs), p_multiplicative());
+      additiveOp, additiveOp.type, std::move(lhs), p_multiplicative());
 
-  return p_additiveP(move(additiveExpr));
+  return p_additiveP(std::move(additiveExpr));
 }
 
 // additive -> multiplicative additive'
@@ -914,7 +963,7 @@ unique_ptr<ASTNode> p_additive() {
     return nullptr; // Error
   }
 
-  return p_additiveP(move(multiplicativeExpr));
+  return p_additiveP(std::move(multiplicativeExpr));
 }
 
 // relational' -> "<=" additive relational' | "<" additive relational' | ">="
@@ -929,9 +978,9 @@ unique_ptr<ASTNode> p_relationalP(unique_ptr<ASTNode> lhs) {
     }
   }
   unique_ptr<BinaryASTNode> relationalExpr = make_unique<BinaryASTNode>(
-      relationalOp, relationalOp.type, move(lhs), p_additive());
+      relationalOp, relationalOp.type, std::move(lhs), p_additive());
 
-  return p_relationalP(move(relationalExpr));
+  return p_relationalP(std::move(relationalExpr));
 }
 
 // relational -> additive relational'
@@ -941,7 +990,7 @@ unique_ptr<ASTNode> p_relational() {
     return nullptr; // Error
   }
 
-  return p_relationalP(move(additiveExpr));
+  return p_relationalP(std::move(additiveExpr));
 }
 
 // equality' -> "==" relational equality' | "!=" relational equality' | ϵ
@@ -955,9 +1004,9 @@ unique_ptr<ASTNode> p_equalityP(unique_ptr<ASTNode> lhs) {
     }
   }
   unique_ptr<BinaryASTNode> equalityExpr = make_unique<BinaryASTNode>(
-      equalityOp, equalityOp.type, move(lhs), p_relational());
+      equalityOp, equalityOp.type, std::move(lhs), p_relational());
 
-  return p_equalityP(move(equalityExpr));
+  return p_equalityP(std::move(equalityExpr));
 }
 
 // equality -> relational equality'
@@ -967,7 +1016,7 @@ unique_ptr<ASTNode> p_equality() {
     return nullptr; // Error
   }
 
-  return p_equalityP(move(relationalExpr));
+  return p_equalityP(std::move(relationalExpr));
 }
 
 // logical_and' -> "&&" equality logical_and' | ϵ
@@ -981,8 +1030,8 @@ unique_ptr<ASTNode> p_logical_andP(unique_ptr<ASTNode> lhs) {
     }
   }
   unique_ptr<BinaryASTNode> logicalAndExpr = make_unique<BinaryASTNode>(
-      logicalAndOp, logicalAndOp.type, move(lhs), p_equality());
-  return p_logical_andP(move(logicalAndExpr));
+      logicalAndOp, logicalAndOp.type, std::move(lhs), p_equality());
+  return p_logical_andP(std::move(logicalAndExpr));
 }
 
 // logical_and -> equality logical_and'
@@ -992,7 +1041,7 @@ unique_ptr<ASTNode> p_logical_and() {
     return nullptr; // Error
   }
 
-  return p_logical_andP(move(equalityExpr));
+  return p_logical_andP(std::move(equalityExpr));
 }
 
 // logical_or' -> "||" logical_and logical_or' | ϵ
@@ -1006,9 +1055,9 @@ unique_ptr<ASTNode> p_logical_orP(unique_ptr<ASTNode> lhs) {
     }
   }
   unique_ptr<BinaryASTNode> logicalOrExpr = make_unique<BinaryASTNode>(
-      logicalOrOp, logicalOrOp.type, move(lhs), p_logical_and());
+      logicalOrOp, logicalOrOp.type, std::move(lhs), p_logical_and());
 
-  return p_logical_orP(move(logicalOrExpr));
+  return p_logical_orP(std::move(logicalOrExpr));
 }
 
 // logical_or -> logical_and logical_or'
@@ -1018,14 +1067,14 @@ unique_ptr<ASTNode> p_logical_or() {
     return nullptr; // Error
   }
 
-  return p_logical_orP(move(logicalAndExpr));
+  return p_logical_orP(std::move(logicalAndExpr));
 }
 
 // expr -> IDENT "=" expr | logical_or
 unique_ptr<ASTNode> p_expr() {
   TOKEN temp = CurTok;
   getNextToken();
-  if (!temp.type == IDENT || !match(ASSIGN)) {
+  if (!(temp.type == IDENT) || !match(ASSIGN)) {
     if (contains(first_logical_or, temp.type)) {
       putBackToken(CurTok);
       CurTok = temp;
@@ -1038,7 +1087,7 @@ unique_ptr<ASTNode> p_expr() {
       make_unique<VarReferenceASTNode>(temp, temp.lexeme);
   unique_ptr<ASTNode> expr = p_expr();
 
-  return make_unique<BinaryASTNode>(temp, ASSIGN, move(var), move(expr));
+  return make_unique<BinaryASTNode>(temp, ASSIGN, std::move(var), std::move(expr));
 }
 
 // return_stmt -> "return" expr_stmt
@@ -1053,11 +1102,11 @@ unique_ptr<ASTNode> p_return_stmt() {
     return nullptr; // Error
   }
 
-  return make_unique<ReturnASTNode>(returnTok, move(exprStmt));
+  return make_unique<ReturnASTNode>(returnTok, std::move(exprStmt));
 }
 
 // else_stmt -> "else" block | ϵ
-unique_ptr<ASTNode> p_else_stmt() {
+unique_ptr<BlockASTNode> p_else_stmt() {
   TOKEN elseTok = CurTok;
   if (!match(ELSE)) {
     if (contains(follow_else_stmt, CurTok.type)) {
@@ -1074,23 +1123,24 @@ unique_ptr<ASTNode> p_else_stmt() {
   return block;
 }
 
-// if_stmt -> "if" "(" expr ")" stmt else_stmt
+// if_stmt -> "if" "(" expr ")" block else_stmt
 unique_ptr<ASTNode> p_if_stmt() {
   TOKEN ifTok = CurTok;
   if (!match(IF) || !match(LPAR)) {
     return nullptr; // Error
   }
-  unique_ptr<ASTNode> expr = p_expr();
-  if (!expr || !match(RPAR)) {
+  unique_ptr<ASTNode> cond = p_expr();
+  if (!cond || !match(RPAR)) {
     return nullptr; // Error
   }
-  unique_ptr<ASTNode> stmt = p_stmt();
-  if (!stmt) {
+  unique_ptr<BlockASTNode> thenBlock = p_block();
+  if (!thenBlock) {
     return nullptr; // Error
   }
-  unique_ptr<ASTNode> elseStmt = p_else_stmt();
+  unique_ptr<BlockASTNode> elseStmt = p_else_stmt();
 
-  return make_unique<IfASTNode>(ifTok, move(expr), move(stmt), move(elseStmt));
+  return make_unique<IfASTNode>(ifTok, std::move(cond), std::move(thenBlock),
+                                std::move(elseStmt));
 }
 
 // while_stmt -> "while" "(" expr ")" stmt
@@ -1108,7 +1158,7 @@ unique_ptr<ASTNode> p_while_stmt() {
     return nullptr; // Error
   }
 
-  return make_unique<WhileASTNode>(whileTok, move(expr), move(stmt));
+  return make_unique<WhileASTNode>(whileTok, std::move(expr), std::move(stmt));
 }
 
 // expr_stmt -> expr ";" | ";"
@@ -1149,7 +1199,7 @@ vector<unique_ptr<ASTNode>>
 p_stmt_listP(vector<unique_ptr<ASTNode>> &stmt_list) {
   if (!contains(first_stmt, CurTok.type)) {
     if (contains(follow_stmt_listP, CurTok.type)) {
-      return stmt_list;
+      return std::move(stmt_list);
     } else {
       return {}; // Error
     }
@@ -1158,7 +1208,7 @@ p_stmt_listP(vector<unique_ptr<ASTNode>> &stmt_list) {
   if (!stmt) {
     return {}; // Error
   }
-  stmt_list.push_back(move(stmt));
+  stmt_list.push_back(std::move(stmt));
 
   return p_stmt_listP(stmt_list);
 }
@@ -1170,7 +1220,7 @@ vector<unique_ptr<ASTNode>> p_stmt_list() {
   if (!stmt) {
     return {}; // Error
   }
-  stmt_list.push_back(move(stmt));
+  stmt_list.push_back(std::move(stmt));
 
   return p_stmt_listP(stmt_list);
 }
@@ -1194,7 +1244,7 @@ vector<unique_ptr<VarASTNode>>
 p_local_declsP(vector<unique_ptr<VarASTNode>> &local_decls) {
   if (!contains(first_local_decl, CurTok.type)) {
     if (contains(follow_local_declsP, CurTok.type)) {
-      return local_decls;
+      return std::move(local_decls);
     } else {
       return {}; // Error
     }
@@ -1203,7 +1253,7 @@ p_local_declsP(vector<unique_ptr<VarASTNode>> &local_decls) {
   if (!localDecl) {
     return {}; // Error
   }
-  local_decls.push_back(move(localDecl));
+  local_decls.push_back(std::move(localDecl));
 
   return p_local_declsP(local_decls);
 }
@@ -1226,7 +1276,7 @@ unique_ptr<BlockASTNode> p_block() {
     return nullptr; // Error
   }
 
-  return make_unique<BlockASTNode>(move(localDecls), move(stmtList));
+  return make_unique<BlockASTNode>(std::move(localDecls), std::move(stmtList));
 }
 
 // param -> var_type IDENT
@@ -1248,7 +1298,7 @@ vector<unique_ptr<VarASTNode>>
 p_param_listP(vector<unique_ptr<VarASTNode>> &param_list) {
   if (!match(COMMA)) {
     if (contains(follow_param_listP, CurTok.type)) {
-      return param_list;
+      return std::move(param_list);
     } else {
       return {}; // Error
     }
@@ -1257,7 +1307,7 @@ p_param_listP(vector<unique_ptr<VarASTNode>> &param_list) {
   if (!param) {
     return {}; // Error
   }
-  param_list.push_back(move(param));
+  param_list.push_back(std::move(param));
 
   return p_param_listP(param_list);
 }
@@ -1269,7 +1319,7 @@ vector<unique_ptr<VarASTNode>> p_param_list() {
   if (!param) {
     return {}; // Error
   }
-  param_list.push_back(move(param));
+  param_list.push_back(std::move(param));
 
   return p_param_listP(param_list);
 }
@@ -1342,14 +1392,14 @@ unique_ptr<ASTNode> p_decl() {
     return nullptr; // Error
   }
 
-  return make_unique<FunctionASTNode>(declType, declName.lexeme, move(params), move(block));
+  return make_unique<FunctionASTNode>(declType, declName.lexeme, std::move(params), std::move(block));
 }
 
 // decl_list' -> decl decl_list' | ϵ
 vector<unique_ptr<ASTNode>> p_decl_listP(vector<unique_ptr<ASTNode>> &decl_list) {
   if (!contains(first_decl, CurTok.type)) {
     if (contains(follow_decl_listP, CurTok.type)) {
-      return decl_list;
+      return std::move(decl_list);
     } else {
       return {}; // Error
     }
@@ -1358,7 +1408,7 @@ vector<unique_ptr<ASTNode>> p_decl_listP(vector<unique_ptr<ASTNode>> &decl_list)
   if (!decl) {
     return {}; // Error
   }
-  decl_list.push_back(move(decl));
+  decl_list.push_back(std::move(decl));
 
   return p_decl_listP(decl_list);
 }
@@ -1388,14 +1438,14 @@ unique_ptr<ExternASTNode> p_extern() {
     return nullptr; // Error
   }
 
-  return make_unique<ExternASTNode>(externName.lexeme, move(params));
+  return make_unique<ExternASTNode>(externName.lexeme, std::move(params));
 }
 
 // extern_list' -> extern extern_list' | ϵ
 vector<unique_ptr<ExternASTNode>> p_extern_listP(vector<unique_ptr<ExternASTNode>> &extern_list) {
   if (!contains(first_extern, CurTok.type)) {
     if (contains(follow_extern_listP, CurTok.type)) {
-      return extern_list;
+      return std::move(extern_list);
     } else {
       return {}; // Error
     }
@@ -1404,7 +1454,7 @@ vector<unique_ptr<ExternASTNode>> p_extern_listP(vector<unique_ptr<ExternASTNode
   if (!externDecl) {
     return {}; // Error
   }
-  extern_list.push_back(move(externDecl));
+  extern_list.push_back(std::move(externDecl));
 
   return p_extern_listP(extern_list);
 }
@@ -1422,12 +1472,12 @@ unique_ptr<ProgramASTNode> p_program() {
     vector<unique_ptr<ExternASTNode>> externs = p_extern_list();
     vector<unique_ptr<ASTNode>> decls = p_decl_list();
 
-    return make_unique<ProgramASTNode>(move(externs), move(decls));
+    return make_unique<ProgramASTNode>(std::move(externs), std::move(decls));
   } else if (contains(first_decl_list, CurTok.type)) {
     vector<unique_ptr<ExternASTNode>> externs;
     vector<unique_ptr<ASTNode>> decls = p_decl_list();
   
-    return make_unique<ProgramASTNode>(move(externs), move(decls));
+    return make_unique<ProgramASTNode>(std::move(externs), std::move(decls));
   } else {
     return nullptr;
   }
@@ -1442,16 +1492,77 @@ static unique_ptr<ProgramASTNode> parser() {
     return program;
   } else {
     fprintf(stderr, "Parsing Failed\n");
+    return nullptr;
   }
 }
 
 //===----------------------------------------------------------------------===//
-// Code Generation
+// `Generation
 //===----------------------------------------------------------------------===//
 
 static LLVMContext TheContext;
 static IRBuilder<> Builder(TheContext);
 static unique_ptr<Module> TheModule;
+
+Value *IntASTNode::codegen() {
+  return nullptr;
+}
+
+Value *FloatASTNode::codegen() {
+  return nullptr;
+}
+
+Value *BoolASTNode::codegen() {
+  return nullptr;
+}
+
+Value *VarASTNode::codegen() {
+  return nullptr;
+}
+
+Value *VarReferenceASTNode::codegen() {
+  return nullptr;
+}
+
+Value *CallASTNode::codegen() {
+  return nullptr;
+}
+
+Value *UnaryASTNode::codegen() {
+  return nullptr;
+}
+
+Value *BinaryASTNode::codegen() {
+  return nullptr;
+}
+
+Value *ReturnASTNode::codegen() {
+  return nullptr;
+}
+
+Value *IfASTNode::codegen() {
+  return nullptr;
+}
+
+Value *WhileASTNode::codegen() {
+  return nullptr;
+}
+
+Value *BlockASTNode::codegen() {
+  return nullptr;
+}
+
+Value *FunctionASTNode::codegen() {
+  return nullptr;
+}
+
+Value *ExternASTNode::codegen() {
+  return nullptr;
+}
+
+Value *ProgramASTNode::codegen() {
+  return nullptr;
+}
 
 //===----------------------------------------------------------------------===//
 // AST Printer
