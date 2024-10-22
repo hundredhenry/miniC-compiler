@@ -11,13 +11,13 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Verifier.h"
-#include "llvm/Support/FileSystem.h"
-#include "llvm/TargetParser/Host.h"
 #include "llvm/MC/TargetRegistry.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
+#include "llvm/TargetParser/Host.h"
 #include <algorithm>
 #include <cassert>
 #include <cctype>
@@ -35,6 +35,7 @@
 
 using namespace llvm;
 using namespace llvm::sys;
+using namespace std;
 
 FILE *pFile;
 
@@ -106,19 +107,19 @@ enum TOKEN_TYPE {
 // TOKEN struct is used to keep track of information about a token
 struct TOKEN {
   int type = -100;
-  std::string lexeme;
+  string lexeme;
   int lineNo;
   int columnNo;
 };
 
-static std::string IdentifierStr; // Filled in if IDENT
-static int IntVal;                // Filled in if INT_LIT
-static bool BoolVal;              // Filled in if BOOL_LIT
-static float FloatVal;            // Filled in if FLOAT_LIT
-static std::string StringVal;     // Filled in if String Literal
+static string IdentifierStr; // Filled in if IDENT
+static int IntVal;           // Filled in if INT_LIT
+static bool BoolVal;         // Filled in if BOOL_LIT
+static float FloatVal;       // Filled in if FLOAT_LIT
+static string StringVal;     // Filled in if String Literal
 static int lineNo, columnNo;
 
-static TOKEN returnTok(std::string lexVal, int tok_type) {
+static TOKEN returnTok(string lexVal, int tok_type) {
   TOKEN return_tok;
   return_tok.lexeme = lexVal;
   return_tok.type = tok_type;
@@ -232,7 +233,7 @@ static TOKEN gettok() {
   }
 
   if (isdigit(LastChar) || LastChar == '.') { // Number: [0-9]+.
-    std::string NumStr;
+    string NumStr;
 
     if (LastChar == '.') { // Floating point Number: .[0-9]+
       do {
@@ -355,7 +356,7 @@ static TOKEN gettok() {
 
   // Otherwise, just return the character as its ascii value.
   int ThisChar = LastChar;
-  std::string s(1, ThisChar);
+  string s(1, ThisChar);
   LastChar = getc(pFile);
   columnNo++;
   return returnTok(s, int(ThisChar));
@@ -369,7 +370,7 @@ static TOKEN gettok() {
 /// token the parser is looking at.  getNextToken reads another token from the
 /// lexer and updates CurTok with its results.
 static TOKEN CurTok;
-static std::deque<TOKEN> tok_buffer;
+static deque<TOKEN> tok_buffer;
 
 static TOKEN getNextToken() {
 
@@ -388,8 +389,8 @@ static void putBackToken(TOKEN tok) { tok_buffer.push_front(tok); }
 // Helper functions
 //===----------------------------------------------------------------------===//
 
-static bool contains(std::vector<TOKEN_TYPE> vec, int tok) {
-  if (std::find(vec.begin(), vec.end(), tok) != vec.end()) {
+static bool contains(vector<TOKEN_TYPE> vec, int tok) {
+  if (find(vec.begin(), vec.end(), tok) != vec.end()) {
     return true;
   } else {
     return false;
@@ -409,372 +410,725 @@ static bool match(int tok) {
 // AST nodes
 //===----------------------------------------------------------------------===//
 
-/// ASTnode - Base class for all AST nodes.
-class ASTnode {
+/// ASTNode - Base class for all AST nodes.
+class ASTNode {
 public:
-  virtual ~ASTnode() {}
+  virtual ~ASTNode() {}
   virtual Value *codegen() = 0;
-  virtual std::string to_string() const {return "";};
+  virtual string to_string() const { return ""; };
 };
 
-/// IntASTnode - Class for integer literals.
-class IntASTnode : public ASTnode {
-  int Val;
+/// IntASTNode - Class for integer literals.
+class IntASTNode : public ASTNode {
   TOKEN Tok;
-  std::string Name;
+  int Val;
 
 public:
-  IntASTnode(TOKEN tok, int val) : Val(val), Tok(tok) {}
+  IntASTNode(TOKEN tok, int val) : Tok(tok), Val(val) {}
   virtual Value *codegen() override;
-  virtual std::string to_string() const override {
-    return "IntASTnode: " + std::to_string(Val);
+  virtual string to_string() const override {
+    return "IntASTNode: " + ::to_string(Val);
   };
 };
 
-//===----------------------------- -----------------------------------------===//
+/// FloatASTNode - Class for float literals.
+class FloatASTNode : public ASTNode {
+  TOKEN Tok;
+  float Val;
+
+public:
+  FloatASTNode(TOKEN tok, float val) : Tok(tok), Val(val) {}
+  virtual Value *codegen() override;
+  virtual string to_string() const override {
+    return "FloatASTNode: " + ::to_string(Val);
+  };
+};
+
+/// BoolASTNode - Class for boolean literals.
+class BoolASTNode : public ASTNode {
+  TOKEN Tok;
+  bool Val;
+
+public:
+  BoolASTNode(TOKEN tok, bool val) : Tok(tok), Val(val) {}
+  virtual Value *codegen() override;
+  virtual string to_string() const override {
+    return "BoolASTNode: " + ::to_string(Val);
+  };
+};
+
+/// VarASTNode - Class for variable declarations.
+class VarASTNode : public ASTNode {
+  TOKEN Tok;
+  int Type;
+  string Name;
+
+public:
+  VarASTNode(TOKEN tok, int type, const string &name)
+      : Tok(tok), Type(type), Name(name) {}
+  virtual Value *codegen() override;
+  virtual string to_string() const override { return "VarASTNode: " + Name; };
+};
+
+/// VarReferenceASTNode - Class for variable references.
+class VarReferenceASTNode : public ASTNode {
+  TOKEN Tok;
+  string Name;
+
+public:
+  VarReferenceASTNode(TOKEN tok, const string &name) : Tok(tok), Name(name) {}
+  virtual Value *codegen() override;
+  virtual string to_string() const override {
+    return "VarRefereneASTNode: " + Name;
+  };
+};
+
+/// UnaryASTNode - Class for unary operators.
+class UnaryASTNode : public ASTNode {
+  TOKEN Tok;
+  int Op;
+  unique_ptr<ASTNode> Operand;
+
+public:
+  UnaryASTNode(TOKEN tok, int op, unique_ptr<ASTNode> operand)
+      : Tok(tok), Op(op), Operand(move(operand)) {}
+  virtual Value *codegen() override;
+  virtual string to_string() const override {
+    return "UnaryASTNode: " + ::to_string(Op);
+  };
+};
+
+/// BinaryASTNode - Class for binary operators.
+class BinaryASTNode : public ASTNode {
+  TOKEN Tok;
+  int Op;
+  unique_ptr<ASTNode> LHS, RHS;
+
+public:
+  BinaryASTNode(TOKEN tok, int op, unique_ptr<ASTNode> lhs,
+                unique_ptr<ASTNode> rhs)
+      : Tok(tok), Op(op), LHS(move(lhs)), RHS(move(rhs)) {}
+  virtual Value *codegen() override;
+  virtual string to_string() const override {
+    return "BinaryASTNode: " + ::to_string(Op);
+  };
+};
+
+/// CallASTNode - Class for function calls.
+class CallASTNode : public ASTNode {
+  TOKEN Tok;
+  string Func;
+  vector<unique_ptr<ASTNode>> Args;
+
+public:
+  CallASTNode(TOKEN tok, const string &func, vector<unique_ptr<ASTNode>> args)
+      : Tok(tok), Func(func), Args(move(args)) {}
+  virtual Value *codegen() override;
+  virtual string to_string() const override { return "CallASTNode: " + Func; };
+};
+
+/// BlockASTNode - Class for blocks.
+class BlockASTNode : public ASTNode {
+  vector<unique_ptr<VarASTNode>> LocalDecls;
+  vector<unique_ptr<ASTNode>> StmtList;
+
+public:
+  BlockASTNode(vector<unique_ptr<VarASTNode>> localDecls,
+               vector<unique_ptr<ASTNode>> stmtList)
+      : LocalDecls(move(localDecls)), StmtList(move(stmtList)) {}
+  virtual Value *codegen() override;
+  virtual string to_string() const override { return "BlockASTNode"; };
+};
+
+/// IfASTNode - Class for if statements.
+class IfASTNode : public ASTNode {
+  TOKEN Tok;
+  unique_ptr<ASTNode> Cond;
+  unique_ptr<BlockASTNode> Then, Else;
+
+public:
+  IfASTNode(TOKEN tok, unique_ptr<ASTNode> cond, unique_ptr<BlockASTNode> then,
+            unique_ptr<BlockASTNode> els)
+      : Tok(tok), Cond(move(cond)), Then(move(then)), Else(move(els)) {}
+  virtual Value *codegen() override;
+  virtual string to_string() const override { return "IfASTNode"; };
+};
+
+/// WhileASTNode - Class for while statements.
+class WhileASTNode : public ASTNode {
+  TOKEN Tok;
+  unique_ptr<ASTNode> Cond;
+  unique_ptr<ASTNode> Stmt;
+
+public:
+  WhileASTNode(TOKEN tok, unique_ptr<ASTNode> cond, unique_ptr<ASTNode> stmt)
+      : Tok(tok), Cond(move(cond)), Stmt(move(stmt)) {}
+  virtual Value *codegen() override;
+  virtual string to_string() const override { return "WhileASTNode"; };
+};
+
+/// ReturnASTNode - Class for return statements.
+class ReturnASTNode : public ASTNode {
+  TOKEN Tok;
+  unique_ptr<ASTNode> Expr;
+
+public:
+  ReturnASTNode(TOKEN tok, unique_ptr<ASTNode> expr)
+      : Tok(tok), Expr(move(expr)) {}
+  virtual Value *codegen() override;
+  virtual string to_string() const override { return "ReturnASTNode"; };
+};
+
+/// ExternASTNode - Class for extern declarations.
+class ExternASTNode : public ASTNode {
+  string Name;
+  vector<unique_ptr<VarASTNode>> Args;
+
+public:
+  ExternASTNode(const string &name, vector<unique_ptr<VarASTNode>> args)
+      : Name(name), Args(move(args)) {}
+  virtual Value *codegen() override;
+  virtual string to_string() const override {
+    return "ExternASTNode: " + Name;
+  };
+};
+
+/// FunctionASTNode - Class for function definitions.
+class FunctionASTNode : public ASTNode {
+  int Type;
+  string Name;
+  vector<unique_ptr<VarASTNode>> Args;
+  unique_ptr<BlockASTNode> Body;
+
+public:
+  FunctionASTNode(int type, const string &name,
+                  vector<unique_ptr<VarASTNode>> args,
+                  unique_ptr<BlockASTNode> body)
+      : Type(type), Name(name), Args(move(args)), Body(move(body)) {}
+  virtual Value *codegen() override;
+  virtual string to_string() const override {
+    return "FunctionASTNode: " + Name;
+  };
+};
+
+/// ProgramASTNode - Class for the top-level program.
+class ProgramASTNode : public ASTNode {
+  vector<unique_ptr<ExternASTNode>> Externs;
+  vector<unique_ptr<ASTNode>> Decls;
+
+public:
+  ProgramASTNode(vector<unique_ptr<ExternASTNode>> externs,
+                 vector<unique_ptr<ASTNode>> decls)
+      : Externs(move(externs)), Decls(move(decls)) {}
+  virtual Value *codegen() override;
+  virtual string to_string() const override { return "ProgramASTNode"; };
+};
+
+//===-----------------------------
+//-----------------------------------------===//
 // First and Follow sets for each production rule
 //===----------------------------------------------------------------------===//
 
 // First sets of each production
-std::vector<TOKEN_TYPE> first_extern_list = {EXTERN};
-std::vector<TOKEN_TYPE> first_extern_listP = {EXTERN};
-std::vector<TOKEN_TYPE> first_extern = {EXTERN};
-std::vector<TOKEN_TYPE> first_decl_list = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK};
-std::vector<TOKEN_TYPE> first_decl_listP = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK};
-std::vector<TOKEN_TYPE> first_decl = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK};
-std::vector<TOKEN_TYPE> first_type_spec = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK};
-std::vector<TOKEN_TYPE> first_var_type = {BOOL_TOK, FLOAT_TOK, INT_TOK};
-std::vector<TOKEN_TYPE> first_params = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK};
-std::vector<TOKEN_TYPE> first_param_list = {BOOL_TOK, FLOAT_TOK, INT_TOK};
-std::vector<TOKEN_TYPE> first_param_listP = {COMMA};
-std::vector<TOKEN_TYPE> first_param = {BOOL_TOK, FLOAT_TOK, INT_TOK};
-std::vector<TOKEN_TYPE> first_block = {LBRA};
-std::vector<TOKEN_TYPE> first_local_decls = {BOOL_TOK, FLOAT_TOK, INT_TOK};
-std::vector<TOKEN_TYPE> first_local_declsP = {BOOL_TOK, FLOAT_TOK, INT_TOK};
-std::vector<TOKEN_TYPE> first_local_decl = {BOOL_TOK, FLOAT_TOK, INT_TOK};
-std::vector<TOKEN_TYPE> first_stmt_list = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-std::vector<TOKEN_TYPE> first_stmt_listP = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-std::vector<TOKEN_TYPE> first_stmt = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-std::vector<TOKEN_TYPE> first_expr_stmt = {NOT, LPAR, MINUS, SC, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-std::vector<TOKEN_TYPE> first_while_stmt = {WHILE};
-std::vector<TOKEN_TYPE> first_if_stmt = {IF};
-std::vector<TOKEN_TYPE> first_else_stmt = {ELSE};
-std::vector<TOKEN_TYPE> first_return_stmt = {RETURN};
-std::vector<TOKEN_TYPE> first_expr = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-std::vector<TOKEN_TYPE> first_logical_or = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-std::vector<TOKEN_TYPE> first_logical_orP = {OR};
-std::vector<TOKEN_TYPE> first_logical_and = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-std::vector<TOKEN_TYPE> first_logical_andP = {AND};
-std::vector<TOKEN_TYPE> first_equality = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-std::vector<TOKEN_TYPE> first_equalityP = {EQ, NE};
-std::vector<TOKEN_TYPE> first_relational = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-std::vector<TOKEN_TYPE> first_relationalP = {LT, LE, GT, GE};
-std::vector<TOKEN_TYPE> first_additive = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-std::vector<TOKEN_TYPE> first_additiveP = {PLUS, MINUS};
-std::vector<TOKEN_TYPE> first_multiplicative = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-std::vector<TOKEN_TYPE> first_multiplicativeP = {MOD, ASTERIX, DIV};
-std::vector<TOKEN_TYPE> first_factor = {LPAR, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-std::vector<TOKEN_TYPE> first_reference = {BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-std::vector<TOKEN_TYPE> first_referenceP = {LPAR};
-std::vector<TOKEN_TYPE> first_literal = {BOOL_LIT, FLOAT_LIT, INT_LIT};
-std::vector<TOKEN_TYPE> first_args = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-std::vector<TOKEN_TYPE> first_arg_list = {NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-std::vector<TOKEN_TYPE> first_arg_listP = {COMMA};
+const vector<TOKEN_TYPE> first_extern_list = {EXTERN};
+const vector<TOKEN_TYPE> first_extern_listP = {EXTERN};
+const vector<TOKEN_TYPE> first_extern = {EXTERN};
+const vector<TOKEN_TYPE> first_decl_list = {BOOL_TOK, FLOAT_TOK, INT_TOK,
+                                            VOID_TOK};
+const vector<TOKEN_TYPE> first_decl_listP = {BOOL_TOK, FLOAT_TOK, INT_TOK,
+                                             VOID_TOK};
+const vector<TOKEN_TYPE> first_decl = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK};
+const vector<TOKEN_TYPE> first_type_spec = {BOOL_TOK, FLOAT_TOK, INT_TOK,
+                                            VOID_TOK};
+const vector<TOKEN_TYPE> first_var_type = {BOOL_TOK, FLOAT_TOK, INT_TOK};
+const vector<TOKEN_TYPE> first_params = {BOOL_TOK, FLOAT_TOK, INT_TOK,
+                                         VOID_TOK};
+const vector<TOKEN_TYPE> first_param_list = {BOOL_TOK, FLOAT_TOK, INT_TOK};
+const vector<TOKEN_TYPE> first_param_listP = {COMMA};
+const vector<TOKEN_TYPE> first_param = {BOOL_TOK, FLOAT_TOK, INT_TOK};
+const vector<TOKEN_TYPE> first_block = {LBRA};
+const vector<TOKEN_TYPE> first_local_decls = {BOOL_TOK, FLOAT_TOK, INT_TOK};
+const vector<TOKEN_TYPE> first_local_declsP = {BOOL_TOK, FLOAT_TOK, INT_TOK};
+const vector<TOKEN_TYPE> first_local_decl = {BOOL_TOK, FLOAT_TOK, INT_TOK};
+const vector<TOKEN_TYPE> first_stmt_list = {
+    NOT,   LPAR, MINUS,    SC,        IF,    RETURN,
+    WHILE, LBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+const vector<TOKEN_TYPE> first_stmt_listP = {
+    NOT,   LPAR, MINUS,    SC,        IF,    RETURN,
+    WHILE, LBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+const vector<TOKEN_TYPE> first_stmt = {NOT,      LPAR,      MINUS, SC,
+                                       IF,       RETURN,    WHILE, LBRA,
+                                       BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+const vector<TOKEN_TYPE> first_expr_stmt = {
+    NOT, LPAR, MINUS, SC, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+const vector<TOKEN_TYPE> first_while_stmt = {WHILE};
+const vector<TOKEN_TYPE> first_if_stmt = {IF};
+const vector<TOKEN_TYPE> first_else_stmt = {ELSE};
+const vector<TOKEN_TYPE> first_return_stmt = {RETURN};
+const vector<TOKEN_TYPE> first_expr = {NOT,       LPAR,  MINUS,  BOOL_LIT,
+                                       FLOAT_LIT, IDENT, INT_LIT};
+const vector<TOKEN_TYPE> first_logical_or = {NOT,       LPAR,  MINUS,  BOOL_LIT,
+                                             FLOAT_LIT, IDENT, INT_LIT};
+const vector<TOKEN_TYPE> first_logical_orP = {OR};
+const vector<TOKEN_TYPE> first_logical_and = {
+    NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+const vector<TOKEN_TYPE> first_logical_andP = {AND};
+const vector<TOKEN_TYPE> first_equality = {NOT,       LPAR,  MINUS,  BOOL_LIT,
+                                           FLOAT_LIT, IDENT, INT_LIT};
+const vector<TOKEN_TYPE> first_equalityP = {EQ, NE};
+const vector<TOKEN_TYPE> first_relational = {NOT,       LPAR,  MINUS,  BOOL_LIT,
+                                             FLOAT_LIT, IDENT, INT_LIT};
+const vector<TOKEN_TYPE> first_relationalP = {LT, LE, GT, GE};
+const vector<TOKEN_TYPE> first_additive = {NOT,       LPAR,  MINUS,  BOOL_LIT,
+                                           FLOAT_LIT, IDENT, INT_LIT};
+const vector<TOKEN_TYPE> first_additiveP = {PLUS, MINUS};
+const vector<TOKEN_TYPE> first_multiplicative = {
+    NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+const vector<TOKEN_TYPE> first_multiplicativeP = {MOD, ASTERIX, DIV};
+const vector<TOKEN_TYPE> first_factor = {LPAR, BOOL_LIT, FLOAT_LIT, IDENT,
+                                         INT_LIT};
+const vector<TOKEN_TYPE> first_reference = {BOOL_LIT, FLOAT_LIT, IDENT,
+                                            INT_LIT};
+const vector<TOKEN_TYPE> first_referenceP = {LPAR};
+const vector<TOKEN_TYPE> first_literal = {BOOL_LIT, FLOAT_LIT, INT_LIT};
+const vector<TOKEN_TYPE> first_args = {NOT,       LPAR,  MINUS,  BOOL_LIT,
+                                       FLOAT_LIT, IDENT, INT_LIT};
+const vector<TOKEN_TYPE> first_arg_list = {NOT,       LPAR,  MINUS,  BOOL_LIT,
+                                           FLOAT_LIT, IDENT, INT_LIT};
+const vector<TOKEN_TYPE> first_arg_listP = {COMMA};
 
 // Follow sets of each production
-std::vector<TOKEN_TYPE> follow_extern_listP = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK};
-std::vector<TOKEN_TYPE> follow_decl_listP = {EOF_TOK};
-std::vector<TOKEN_TYPE> follow_decl = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK, EOF_TOK};
-std::vector<TOKEN_TYPE> follow_params = {RPAR};
-std::vector<TOKEN_TYPE> follow_param_listP = {RPAR};
-std::vector<TOKEN_TYPE> follow_local_decls = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-std::vector<TOKEN_TYPE> follow_local_declsP = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-std::vector<TOKEN_TYPE> follow_stmt_list = {RBRA};
-std::vector<TOKEN_TYPE> follow_stmt_listP = {RBRA};
-std::vector<TOKEN_TYPE> follow_expr_stmt = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-std::vector<TOKEN_TYPE> follow_else_stmt = {NOT, LPAR, MINUS, SC, IF, RETURN, WHILE, LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-std::vector<TOKEN_TYPE> follow_expr = {RPAR, COMMA, SC};
-std::vector<TOKEN_TYPE> follow_logical_or = {RPAR, COMMA, SC};
-std::vector<TOKEN_TYPE> follow_logical_orP = {RPAR, COMMA, SC};
-std::vector<TOKEN_TYPE> follow_logical_andP = {RPAR, COMMA, SC, OR};
-std::vector<TOKEN_TYPE> follow_equalityP = {AND, RPAR, COMMA, SC, OR};
-std::vector<TOKEN_TYPE> follow_relationalP = {NE, AND, RPAR, COMMA, SC, EQ, OR};
-std::vector<TOKEN_TYPE> follow_additiveP = {NE, AND, RPAR, COMMA, SC, LT, LE, EQ, GT, GE, OR};
-std::vector<TOKEN_TYPE> follow_multiplicativeP = {NE, AND, RPAR, PLUS, MINUS, SC, LT, LE, EQ, GT, GE, OR};
-std::vector<TOKEN_TYPE> follow_referenceP = {NE, MOD, AND, RPAR, ASTERIX, PLUS, COMMA, MINUS, DIV, SC, LT, LE, EQ, GT, GE, OR};
-std::vector<TOKEN_TYPE> follow_args = {RPAR};
-std::vector<TOKEN_TYPE> follow_arg_listP = {RPAR};
+const vector<TOKEN_TYPE> follow_extern_listP = {BOOL_TOK, FLOAT_TOK, INT_TOK,
+                                                VOID_TOK};
+const vector<TOKEN_TYPE> follow_decl = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK,
+                                        EOF_TOK};
+const vector<TOKEN_TYPE> follow_decl_listP = {EOF_TOK};
+const vector<TOKEN_TYPE> follow_params = {RPAR};
+const vector<TOKEN_TYPE> follow_param_listP = {RPAR};
+const vector<TOKEN_TYPE> follow_local_decls = {
+    NOT,  LPAR, MINUS,    SC,        IF,    RETURN, WHILE,
+    LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+const vector<TOKEN_TYPE> follow_local_declsP = {
+    NOT,  LPAR, MINUS,    SC,        IF,    RETURN, WHILE,
+    LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+const vector<TOKEN_TYPE> follow_stmt_list = {RBRA};
+const vector<TOKEN_TYPE> follow_stmt_listP = {RBRA};
+const vector<TOKEN_TYPE> follow_expr_stmt = {
+    NOT,  LPAR, MINUS,    SC,        IF,    RETURN, WHILE,
+    LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+const vector<TOKEN_TYPE> follow_else_stmt = {
+    NOT,  LPAR, MINUS,    SC,        IF,    RETURN, WHILE,
+    LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
+const vector<TOKEN_TYPE> follow_expr = {RPAR, COMMA, SC};
+const vector<TOKEN_TYPE> follow_logical_or = {RPAR, COMMA, SC};
+const vector<TOKEN_TYPE> follow_logical_orP = {RPAR, COMMA, SC};
+const vector<TOKEN_TYPE> follow_logical_andP = {RPAR, COMMA, SC, OR};
+const vector<TOKEN_TYPE> follow_equalityP = {AND, RPAR, COMMA, SC, OR};
+const vector<TOKEN_TYPE> follow_relationalP = {NE, AND, RPAR, COMMA,
+                                               SC, EQ,  OR};
+const vector<TOKEN_TYPE> follow_additiveP = {NE, AND, RPAR, COMMA, SC, LT,
+                                             LE, EQ,  GT,   GE,    OR};
+const vector<TOKEN_TYPE> follow_multiplicativeP = {
+    NE, AND, RPAR, PLUS, MINUS, SC, LT, LE, EQ, GT, GE, OR};
+const vector<TOKEN_TYPE> follow_referenceP = {
+    NE,  MOD, AND, RPAR, ASTERIX, PLUS, COMMA, MINUS,
+    DIV, SC,  LT,  LE,   EQ,      GT,   GE,    OR};
+const vector<TOKEN_TYPE> follow_args = {RPAR};
+const vector<TOKEN_TYPE> follow_arg_listP = {RPAR};
 
 //===----------------------------------------------------------------------===//
 // Recursive Descent Parser - Function call for each production
 //===----------------------------------------------------------------------===//
 
-// Define functions for each production
-bool p_extern_list(); bool p_extern_listP();
-bool p_extern();
-bool p_decl_list(); bool p_decl_listP();
-bool p_decl();
-bool p_type_spec();
-bool p_var_type();
-bool p_params();
-bool p_param_list(); bool p_param_listP();
-bool p_param();
-bool p_block();
-bool p_local_decls(); bool p_local_declsP();
-bool p_local_decl();
-bool p_stmt_list(); bool p_stmt_listP();
-bool p_stmt();
-bool p_expr_stmt();
-bool p_while_stmt();
-bool p_if_stmt();
-bool p_else_stmt();
-bool p_return_stmt();
-bool p_expr();
-bool p_logical_or(); bool p_logical_orP();
-bool p_logical_and(); bool p_logical_andP();
-bool p_equality(); bool p_equalityP();
-bool p_relational(); bool p_relationalP();
-bool p_additive(); bool p_additiveP();
-bool p_multiplicative(); bool p_multiplicativeP();
-bool p_unary();
-bool p_factor();
-bool p_reference(); bool p_referenceP();
-bool p_literal();
-bool p_args();
-bool p_arg_list(); bool p_arg_listP();
-
 // arg_list' -> "," expr arg_list' | ϵ
-bool p_arg_listP() {
-  if (match(COMMA)) {
-    return p_expr() && p_arg_listP();
-  } else if (contains(follow_arg_listP, CurTok.type)) {
-    return true;
-  } else {
-    return false;
+vector<unique_ptr<ASTNode>> p_arg_listP(vector<unique_ptr<ASTNode>> &arg_list) {
+  if (!match(COMMA)) {
+    if (contains(follow_arg_listP, CurTok.type)) {
+      return arg_list;
+    } else {
+      return {}; // Error
+    }
   }
+  unique_ptr<ASTNode> expr = p_expr();
+  if (!expr) {
+    return {}; // Error
+  }
+  arg_list.push_back(move(expr));
+
+  return p_arg_listP(arg_list);
 }
 
 // arg_list -> expr arg_list'
-bool p_arg_list() {
-  return p_expr() && p_arg_listP();
+vector<unique_ptr<ASTNode>> p_arg_list() {
+  vector<unique_ptr<ASTNode>> arg_list;
+  unique_ptr<ASTNode> expr = p_expr();
+  if (!expr) {
+    return {}; // Error
+  }
+  arg_list.push_back(move(expr));
+
+  return p_arg_listP(arg_list);
 }
 
 // args -> arg_list | ϵ
-bool p_args() {
-  if (contains(first_args, CurTok.type)) {
-    return p_arg_list();
-  } else if (contains(follow_args, CurTok.type)) {
-    return true;
-  } else {
-    return false;
+vector<unique_ptr<ASTNode>> p_args() {
+  if (!contains(first_args, CurTok.type)) {
+    if (contains(follow_args, CurTok.type)) {
+      return {};
+    } else {
+      return {}; // Error
+    }
   }
+
+  return p_arg_list();
 }
 
 // literal -> INT_LIT | FLOAT_LIT | BOOL_LIT
-bool p_literal() {
-  if (match(INT_LIT) || match(FLOAT_LIT) || match(BOOL_LIT)) {
-    return true;
+unique_ptr<ASTNode> p_literal() {
+  TOKEN literal = CurTok;
+
+  if (match(INT_LIT)) {
+    return make_unique<IntASTNode>(literal, IntVal);
+  } else if (match(FLOAT_LIT)) {
+    return make_unique<FloatASTNode>(literal, FloatVal);
+  } else if (match(BOOL_LIT)) {
+    return make_unique<BoolASTNode>(literal, BoolVal);
   } else {
-    return false;
+    return nullptr; // Error
   }
 }
 
 // reference' -> "(" args ")" | ϵ
-bool p_referenceP() {
-  if (match(LPAR)) {
-    return p_args() && match(RPAR);
-  } else if (contains(follow_referenceP, CurTok.type)) {
-    return true;
-  } else {
-    return false;
+vector<unique_ptr<ASTNode>> p_referenceP() {
+  if (!match(LPAR)) {
+    if (contains(follow_referenceP, CurTok.type)) {
+      return {};
+    } else {
+      return {}; // Error
+    }
   }
+  vector<unique_ptr<ASTNode>> args = p_args();
+  if (!match(RPAR)) {
+    return {}; // Error
+  }
+
+  return args;
 }
 
 // reference -> IDENT reference' | literal
-bool p_reference() {
-  if (match(IDENT)) {
-    return p_referenceP();
-  } else if (contains(first_literal, CurTok.type)) {
-    return p_literal();
-  } else {
-    return false;
+unique_ptr<ASTNode> p_reference() {
+  TOKEN func = CurTok;
+  if (!match(IDENT)) {
+    if (contains(first_literal, CurTok.type)) {
+      return p_literal();
+    } else {
+      return nullptr; // Error
+    }
   }
+  vector<unique_ptr<ASTNode>> args = p_referenceP();
+
+  return make_unique<CallASTNode>(func, func.lexeme, move(args));
 }
 
 // factor -> "(" expr ")" | reference
-bool p_factor() {
-  if (match(LPAR)) {
-    return p_expr() && match(RPAR);
-  } else if (contains(first_reference, CurTok.type)) {
-    return p_reference();
-  } else {
-    return false;
+unique_ptr<ASTNode> p_factor() {
+  if (!match(LPAR)) {
+    if (contains(first_reference, CurTok.type)) {
+      return p_reference();
+    } else {
+      return nullptr; // Error
+    }
   }
+  unique_ptr<ASTNode> expr = p_expr();
+  if (!expr) {
+    return nullptr; // Error
+  }
+  if (!match(RPAR)) {
+    return nullptr; // Error
+  }
+
+  return expr;
 }
 
 // unary -> "-" unary | "!" unary | factor
-bool p_unary() {
-  if (match(MINUS) || match(NOT)) {
-    return p_unary();
-  } else if (contains(first_factor, CurTok.type)) {
-    return p_factor();
-  } else {
-    return false;
+unique_ptr<ASTNode> p_unary() {
+  TOKEN unaryOp = CurTok;
+  if (!match(MINUS) && !match(NOT)) {
+    if (contains(first_factor, CurTok.type)) {
+      return p_factor();
+    } else {
+      return nullptr; // Error
+    }
   }
+
+  return make_unique<UnaryASTNode>(unaryOp, unaryOp.type, p_unary());
 }
 
-// multiplicative' -> "*" unary multiplicative' | "/" unary multiplicative' | "%" unary multiplicative' | ϵ
-bool p_multiplicativeP() {
-  if (match(ASTERIX) || match(DIV) || match(MOD)) {
-    return p_unary() && p_multiplicativeP();
-  } else if (contains(follow_multiplicativeP, CurTok.type)) {
-    return true;
-  } else {
-    return false;
+// multiplicative' -> "*" unary multiplicative' | "/" unary multiplicative' |
+// "%" unary multiplicative' | ϵ
+unique_ptr<ASTNode> p_multiplicativeP(unique_ptr<ASTNode> lhs) {
+  TOKEN multiplicativeOp = CurTok;
+  if (!match(ASTERIX) && !match(DIV) && !match(MOD)) {
+    if (contains(follow_multiplicativeP, CurTok.type)) {
+      return lhs;
+    } else {
+      return nullptr; // Error
+    }
   }
+  unique_ptr<BinaryASTNode> multiplicativeExpr = make_unique<BinaryASTNode>(
+      multiplicativeOp, multiplicativeOp.type, move(lhs), p_unary());
+
+  return p_multiplicativeP(move(multiplicativeExpr));
 }
 
 // multiplicative -> unary multiplicative'
-bool p_multiplicative() {
-  return p_unary() && p_multiplicativeP();
+unique_ptr<ASTNode> p_multiplicative() {
+  unique_ptr<ASTNode> unary = p_unary();
+  if (!unary) {
+    return nullptr; // Error
+  }
+
+  return p_multiplicativeP(move(unary));
 }
 
 // additive' -> "+" multiplicative additive' | "-" multiplicative additive' | ϵ
-bool p_additiveP() {
-  if (match(PLUS) || match(MINUS)) {
-    return p_multiplicative() && p_additiveP();
-  } else if (contains(follow_additiveP, CurTok.type)) {
-    return true;
-  } else {
-    return false;
+unique_ptr<ASTNode> p_additiveP(unique_ptr<ASTNode> lhs) {
+  TOKEN additiveOp = CurTok;
+  if (!match(PLUS) && !match(MINUS)) {
+    if (contains(follow_additiveP, CurTok.type)) {
+      return lhs;
+    } else {
+      return nullptr; // Error
+    }
   }
+  unique_ptr<BinaryASTNode> additiveExpr = make_unique<BinaryASTNode>(
+      additiveOp, additiveOp.type, move(lhs), p_multiplicative());
+
+  return p_additiveP(move(additiveExpr));
 }
 
 // additive -> multiplicative additive'
-bool p_additive() {
-  return p_multiplicative() && p_additiveP();
+unique_ptr<ASTNode> p_additive() {
+  unique_ptr<ASTNode> multiplicativeExpr = p_multiplicative();
+  if (!multiplicativeExpr) {
+    return nullptr; // Error
+  }
+
+  return p_additiveP(move(multiplicativeExpr));
 }
 
-// relational' -> "<=" additive relational' | "<" additive relational' | ">=" additive relational' | ">" additive relational' | ϵ
-bool p_relationalP() {
-
-  if (match(LE) || match(LT) || match(GE) || match(GT)) {
-    return p_additive() && p_relationalP();
-  } else if (contains(follow_relationalP, CurTok.type)) {
-    return true;
-  } else {
-    return false;
+// relational' -> "<=" additive relational' | "<" additive relational' | ">="
+// additive relational' | ">" additive relational' | ϵ
+unique_ptr<ASTNode> p_relationalP(unique_ptr<ASTNode> lhs) {
+  TOKEN relationalOp = CurTok;
+  if (!match(LE) && !match(LT) && !match(GE) && !match(GT)) {
+    if (contains(follow_relationalP, CurTok.type)) {
+      return lhs;
+    } else {
+      return nullptr; // Error
+    }
   }
+  unique_ptr<BinaryASTNode> relationalExpr = make_unique<BinaryASTNode>(
+      relationalOp, relationalOp.type, move(lhs), p_additive());
+
+  return p_relationalP(move(relationalExpr));
 }
 
 // relational -> additive relational'
-bool p_relational() {
-  return p_additive() && p_relationalP();
+unique_ptr<ASTNode> p_relational() {
+  unique_ptr<ASTNode> additiveExpr = p_additive();
+  if (!additiveExpr) {
+    return nullptr; // Error
+  }
+
+  return p_relationalP(move(additiveExpr));
 }
 
 // equality' -> "==" relational equality' | "!=" relational equality' | ϵ
-bool p_equalityP() {
-  if (match(EQ) || match(NE)) {
-    return p_relational() && p_equalityP();
-  } else if (contains(follow_equalityP, CurTok.type)) {
-    return true;
-  } else {
-    return false;
+unique_ptr<ASTNode> p_equalityP(unique_ptr<ASTNode> lhs) {
+  TOKEN equalityOp = CurTok;
+  if (!match(EQ) && !match(NE)) {
+    if (contains(follow_equalityP, CurTok.type)) {
+      return lhs;
+    } else {
+      return nullptr; // Error
+    }
   }
+  unique_ptr<BinaryASTNode> equalityExpr = make_unique<BinaryASTNode>(
+      equalityOp, equalityOp.type, move(lhs), p_relational());
+
+  return p_equalityP(move(equalityExpr));
 }
 
 // equality -> relational equality'
-bool p_equality() {
-  return p_relational() && p_equalityP();
+unique_ptr<ASTNode> p_equality() {
+  unique_ptr<ASTNode> relationalExpr = p_relational();
+  if (!relationalExpr) {
+    return nullptr; // Error
+  }
+
+  return p_equalityP(move(relationalExpr));
 }
 
 // logical_and' -> "&&" equality logical_and' | ϵ
-bool p_logical_andP() {
-  if (match(AND)) {
-    return p_equality() && p_logical_andP();
-  } else if (contains(follow_logical_andP, CurTok.type)) {
-    return true;
-  } else {
-    return false;
+unique_ptr<ASTNode> p_logical_andP(unique_ptr<ASTNode> lhs) {
+  TOKEN logicalAndOp = CurTok;
+  if (!match(AND)) {
+    if (contains(follow_logical_andP, CurTok.type)) {
+      return lhs;
+    } else {
+      return nullptr; // Error
+    }
   }
+  unique_ptr<BinaryASTNode> logicalAndExpr = make_unique<BinaryASTNode>(
+      logicalAndOp, logicalAndOp.type, move(lhs), p_equality());
+  return p_logical_andP(move(logicalAndExpr));
 }
 
 // logical_and -> equality logical_and'
-bool p_logical_and() {
-  return p_equality() && p_logical_andP();
+unique_ptr<ASTNode> p_logical_and() {
+  unique_ptr<ASTNode> equalityExpr = p_equality();
+  if (!equalityExpr) {
+    return nullptr; // Error
+  }
+
+  return p_logical_andP(move(equalityExpr));
 }
 
 // logical_or' -> "||" logical_and logical_or' | ϵ
-bool p_logical_orP() {
-  if (match(OR)) {
-    return p_logical_and() && p_logical_orP();
-  } else if (contains(follow_logical_orP, CurTok.type)) {
-    return true;
-  } else {
-    return false;
+unique_ptr<ASTNode> p_logical_orP(unique_ptr<ASTNode> lhs) {
+  TOKEN logicalOrOp = CurTok;
+  if (!match(OR)) {
+    if (contains(follow_logical_orP, CurTok.type)) {
+      return lhs;
+    } else {
+      return nullptr; // Error
+    }
   }
+  unique_ptr<BinaryASTNode> logicalOrExpr = make_unique<BinaryASTNode>(
+      logicalOrOp, logicalOrOp.type, move(lhs), p_logical_and());
+
+  return p_logical_orP(move(logicalOrExpr));
 }
 
 // logical_or -> logical_and logical_or'
-bool p_logical_or() {
-  return p_logical_and() && p_logical_orP();
+unique_ptr<ASTNode> p_logical_or() {
+  unique_ptr<ASTNode> logicalAndExpr = p_logical_and();
+  if (!logicalAndExpr) {
+    return nullptr; // Error
+  }
+
+  return p_logical_orP(move(logicalAndExpr));
 }
 
 // expr -> IDENT "=" expr | logical_or
-bool p_expr() {
+unique_ptr<ASTNode> p_expr() {
   TOKEN temp = CurTok;
   getNextToken();
-
-  if (temp.type == IDENT && match(ASSIGN)) {
-    return p_expr();
-  } else if (contains(first_logical_or, temp.type)) {
-    putBackToken(CurTok);
-    CurTok = temp;
-    return p_logical_or();
-  } else {
-    return false;
+  if (!temp.type == IDENT || !match(ASSIGN)) {
+    if (contains(first_logical_or, temp.type)) {
+      putBackToken(CurTok);
+      CurTok = temp;
+      return p_logical_or();
+    } else {
+      return nullptr; // Error
+    }
   }
+  unique_ptr<VarReferenceASTNode> var =
+      make_unique<VarReferenceASTNode>(temp, temp.lexeme);
+  unique_ptr<ASTNode> expr = p_expr();
+
+  return make_unique<BinaryASTNode>(temp, ASSIGN, move(var), move(expr));
 }
 
 // return_stmt -> "return" expr_stmt
-bool p_return_stmt() {
-  return match(RETURN) && p_expr_stmt();
+unique_ptr<ASTNode> p_return_stmt() {
+  TOKEN returnTok = CurTok;
+  if (!match(RETURN)) {
+    return nullptr; // Error
+  }
+
+  unique_ptr<ASTNode> exprStmt = p_expr_stmt();
+  if (!exprStmt) {
+    return nullptr; // Error
+  }
+
+  return make_unique<ReturnASTNode>(returnTok, move(exprStmt));
 }
 
 // else_stmt -> "else" block | ϵ
-bool p_else_stmt() {
-  if (match(ELSE)) {
-    return p_block();
-  } else if (contains(follow_else_stmt, CurTok.type)) {
-    return true;
-  } else {
-    return false;
+unique_ptr<ASTNode> p_else_stmt() {
+  TOKEN elseTok = CurTok;
+  if (!match(ELSE)) {
+    if (contains(follow_else_stmt, CurTok.type)) {
+      return nullptr;
+    } else {
+      return nullptr; // Error
+    }
   }
+  unique_ptr<BlockASTNode> block = p_block();
+  if (!block) {
+    return nullptr; // Error
+  }
+
+  return block;
 }
 
 // if_stmt -> "if" "(" expr ")" stmt else_stmt
-bool p_if_stmt() {
-  return match(IF) && match(LPAR) && p_expr() && match(RPAR) && p_block() && p_else_stmt();
+unique_ptr<ASTNode> p_if_stmt() {
+  TOKEN ifTok = CurTok;
+  if (!match(IF) || !match(LPAR)) {
+    return nullptr; // Error
+  }
+  unique_ptr<ASTNode> expr = p_expr();
+  if (!expr || !match(RPAR)) {
+    return nullptr; // Error
+  }
+  unique_ptr<ASTNode> stmt = p_stmt();
+  if (!stmt) {
+    return nullptr; // Error
+  }
+  unique_ptr<ASTNode> elseStmt = p_else_stmt();
+
+  return make_unique<IfASTNode>(ifTok, move(expr), move(stmt), move(elseStmt));
 }
 
 // while_stmt -> "while" "(" expr ")" stmt
-bool p_while_stmt() {
-  return match(WHILE) && match(LPAR) && p_expr() && match(RPAR) && p_stmt();
+unique_ptr<ASTNode> p_while_stmt() {
+  TOKEN whileTok = CurTok;
+  if (!match(WHILE) || !match(LPAR)) {
+    return nullptr; // Error
+  }
+  unique_ptr<ASTNode> expr = p_expr();
+  if (!expr || !match(RPAR)) {
+    return nullptr; // Error
+  }
+  unique_ptr<ASTNode> stmt = p_stmt();
+  if (!stmt) {
+    return nullptr; // Error
+  }
+
+  return make_unique<WhileASTNode>(whileTok, move(expr), move(stmt));
 }
 
 // expr_stmt -> expr ";" | ";"
-bool p_expr_stmt() {
-  if (contains(first_expr, CurTok.type)) {
-    return p_expr() && match(SC);
-  } else if (match(SC)) {
-    return true;
-  } else {
-    return false;
+unique_ptr<ASTNode> p_expr_stmt() {
+  if (!contains(first_expr, CurTok.type)) {
+    if (!match(SC)) {
+      return nullptr; // Error
+    }
+    return nullptr;
   }
+  unique_ptr<ASTNode> expr = p_expr();
+  if (!expr || !match(SC)) {
+    return nullptr; // Error
+  }
+
+  return expr;
 }
 
 // stmt -> expr_stmt | block | if_stmt | while_stmt | return_stmt
-bool p_stmt() {
+unique_ptr<ASTNode> p_stmt() {
   if (contains(first_expr_stmt, CurTok.type)) {
     return p_expr_stmt();
   } else if (contains(first_block, CurTok.type)) {
@@ -786,181 +1140,306 @@ bool p_stmt() {
   } else if (contains(first_return_stmt, CurTok.type)) {
     return p_return_stmt();
   } else {
-    return false;
+    return nullptr; // Error
   }
 }
 
 // stmt_list' -> stmt stmt_list' | ϵ
-bool p_stmt_listP() {
-  if (contains(first_stmt, CurTok.type)) {
-    return p_stmt() && p_stmt_listP();
-  } else if (contains(follow_stmt_listP, CurTok.type)) {
-    return true;
-  } else {
-    return false;
+vector<unique_ptr<ASTNode>>
+p_stmt_listP(vector<unique_ptr<ASTNode>> &stmt_list) {
+  if (!contains(first_stmt, CurTok.type)) {
+    if (contains(follow_stmt_listP, CurTok.type)) {
+      return stmt_list;
+    } else {
+      return {}; // Error
+    }
   }
+  unique_ptr<ASTNode> stmt = p_stmt();
+  if (!stmt) {
+    return {}; // Error
+  }
+  stmt_list.push_back(move(stmt));
+
+  return p_stmt_listP(stmt_list);
 }
 
 // stmt_list -> stmt stmt_list'
-bool p_stmt_list() {
-  return p_stmt() && p_stmt_listP();
+vector<unique_ptr<ASTNode>> p_stmt_list() {
+  vector<unique_ptr<ASTNode>> stmt_list;
+  unique_ptr<ASTNode> stmt = p_stmt();
+  if (!stmt) {
+    return {}; // Error
+  }
+  stmt_list.push_back(move(stmt));
+
+  return p_stmt_listP(stmt_list);
 }
 
 // local_decl -> var_type IDENT ";"
-bool p_local_decl() {
-  return p_var_type() && match(IDENT) && match(SC);
+unique_ptr<VarASTNode> p_local_decl() {
+  int varType = p_var_type();
+  if (varType == 0) {
+    return nullptr; // Error
+  }
+  TOKEN varName = CurTok;
+  if (!match(IDENT) || !match(SC)) {
+    return nullptr; // Error
+  }
+
+  return make_unique<VarASTNode>(varName, varType, varName.lexeme);
 }
 
 // local_decls' -> local_decl local_decls' | ϵ
-bool p_local_declsP() {
-  if (contains(first_local_decl, CurTok.type)) {
-    return p_local_decl() && p_local_declsP();
-  } else if (contains(follow_local_declsP, CurTok.type)) {
-    return true;
-  } else {
-    return false;
+vector<unique_ptr<VarASTNode>>
+p_local_declsP(vector<unique_ptr<VarASTNode>> &local_decls) {
+  if (!contains(first_local_decl, CurTok.type)) {
+    if (contains(follow_local_declsP, CurTok.type)) {
+      return local_decls;
+    } else {
+      return {}; // Error
+    }
   }
+  unique_ptr<VarASTNode> localDecl = p_local_decl();
+  if (!localDecl) {
+    return {}; // Error
+  }
+  local_decls.push_back(move(localDecl));
+
+  return p_local_declsP(local_decls);
 }
 
 // local_decls -> local_decls'
-bool p_local_decls() {
-  return p_local_declsP();
+vector<unique_ptr<VarASTNode>> p_local_decls() {
+  vector<unique_ptr<VarASTNode>> local_decls;
+
+  return p_local_declsP(local_decls);
 }
 
 // block -> "{" local_decls stmt_list "}"
-bool p_block() {
-  return match(LBRA) && p_local_decls() && p_stmt_list() && match(RBRA);
+unique_ptr<BlockASTNode> p_block() {
+  if (!match(LBRA)) {
+    return nullptr; // Error
+  }
+  vector<unique_ptr<VarASTNode>> localDecls = p_local_decls();
+  vector<unique_ptr<ASTNode>> stmtList = p_stmt_list();
+  if (!match(RBRA)) {
+    return nullptr; // Error
+  }
+
+  return make_unique<BlockASTNode>(move(localDecls), move(stmtList));
 }
 
 // param -> var_type IDENT
-bool p_param() {
-  return p_var_type() && match(IDENT);
+unique_ptr<VarASTNode> p_param() {
+  int varType = p_var_type();
+  if (varType == 0) {
+    return nullptr; // Error
+  }
+  TOKEN varName = CurTok;
+  if (!match(IDENT)) {
+    return nullptr; // Error
+  }
+
+  return make_unique<VarASTNode>(varName, varType, varName.lexeme);
 }
 
 // param_list' -> "," param param_list' | ϵ
-bool p_param_listP() {
-  if (match(COMMA)) {
-    return p_param() && p_param_listP();
-  } else if (contains(follow_param_listP, CurTok.type)) {
-    return true;
-  } else {
-    return false;
+vector<unique_ptr<VarASTNode>>
+p_param_listP(vector<unique_ptr<VarASTNode>> &param_list) {
+  if (!match(COMMA)) {
+    if (contains(follow_param_listP, CurTok.type)) {
+      return param_list;
+    } else {
+      return {}; // Error
+    }
   }
+  unique_ptr<VarASTNode> param = p_param();
+  if (!param) {
+    return {}; // Error
+  }
+  param_list.push_back(move(param));
+
+  return p_param_listP(param_list);
 }
 
 // param_list -> param param_list'
-bool p_param_list() {
-  return p_param() && p_param_listP();
+vector<unique_ptr<VarASTNode>> p_param_list() {
+  vector<unique_ptr<VarASTNode>> param_list;
+  unique_ptr<VarASTNode> param = p_param();
+  if (!param) {
+    return {}; // Error
+  }
+  param_list.push_back(move(param));
+
+  return p_param_listP(param_list);
 }
 
 // params -> param_list | "void" | ϵ
-bool p_params() {
-  if (contains(first_param_list, CurTok.type)) {
-    return p_param_list();
-  } else if (match(VOID_TOK)) {
-    return true;
-  } else if (contains(follow_params, CurTok.type)) {
-    return true;
-  } else {
-    return false;
+vector<unique_ptr<VarASTNode>> p_params() {
+  if (!contains(first_params, CurTok.type)) {
+    if (contains(follow_params, CurTok.type)) {
+      return {}; // Void, no parameters
+    } else {
+      return {}; // Error
+    }
   }
+
+  return p_param_list();
 }
 
 // var_type -> "int" | "float" | "bool"
-bool p_var_type() {
-  if (match(INT_TOK) || match(FLOAT_TOK) || match(BOOL_TOK)) {
-    return true;
+int p_var_type() {
+  if (match(INT_TOK)) {
+    return INT_TOK;
+  } else if (match(FLOAT_TOK)) {
+    return FLOAT_TOK;
+  } else if (match(BOOL_TOK)) {
+    return BOOL_TOK;
   } else {
-    return false;
+    return 0; // Error
   }
 }
 
 // type_spec -> var_type | "void"
-bool p_type_spec() {
+int p_type_spec() {
   if (contains(first_var_type, CurTok.type)) {
     return p_var_type();
   } else if (match(VOID_TOK)) {
-    return true;
+    return VOID_TOK;
   } else {
-    return false;
+    return 0; // Error
   }
 }
 
 // decl -> var_type IDENT ";" | type_spec IDENT "(" params ")" block
-// This is messy
-bool p_decl() {
-  if (contains(first_var_type, CurTok.type)) { // Will be "int", "float", or "bool"
-    if (!p_var_type() || !match(IDENT)) {
-      return false;
-    }
-
-    if (match(SC)) {
-      return true;
-    } else if (match(LPAR) && p_params() && match(RPAR) && p_block()) {
-      return true;
-    } else {
-      return false;
-    }
-  } else if (contains(first_type_spec, CurTok.type)) { // Will only be "void"
-    return p_type_spec() && match(IDENT) && match(LPAR) && p_params() && match(RPAR) && p_block();
-  } else {
-    return false;
+unique_ptr<ASTNode> p_decl() {
+  if (!contains(first_var_type, CurTok.type) && !contains(first_type_spec, CurTok.type)) {
+    return nullptr; // Error
   }
+  int declType = p_var_type();
+  if (declType == 0) {
+    declType = p_type_spec();
+    if (declType == 0) {
+      return nullptr; // Error
+    }
+  }
+  TOKEN declName = CurTok;
+  if (!match(IDENT)) {
+    return nullptr; // Error
+  }
+  if (match(SC)) {
+    return make_unique<VarASTNode>(declName, declType, declName.lexeme);
+  }
+  if (!match(LPAR)) {
+    return nullptr; // Error
+  }
+  vector<unique_ptr<VarASTNode>> params = p_params();
+  if (!match(RPAR)) {
+    return nullptr; // Error
+  }
+  unique_ptr<BlockASTNode> block = p_block();
+  if (!block) {
+    return nullptr; // Error
+  }
+
+  return make_unique<FunctionASTNode>(declType, declName.lexeme, move(params), move(block));
 }
 
 // decl_list' -> decl decl_list' | ϵ
-bool p_decl_listP() {
-  if (contains(first_decl, CurTok.type)) {
-    return p_decl() && p_decl_listP();
-  } else if (contains(follow_decl_listP, CurTok.type)) {
-    return true;
-  } else {
-    return false;
+vector<unique_ptr<ASTNode>> p_decl_listP(vector<unique_ptr<ASTNode>> &decl_list) {
+  if (!contains(first_decl, CurTok.type)) {
+    if (contains(follow_decl_listP, CurTok.type)) {
+      return decl_list;
+    } else {
+      return {}; // Error
+    }
   }
+  unique_ptr<ASTNode> decl = p_decl();
+  if (!decl) {
+    return {}; // Error
+  }
+  decl_list.push_back(move(decl));
+
+  return p_decl_listP(decl_list);
 }
 
 // decl_list -> decl decl_list'
-bool p_decl_list() {
-  return p_decl() && p_decl_listP();
+vector<unique_ptr<ASTNode>> p_decl_list() {
+  vector<unique_ptr<ASTNode>> decl_list;
+
+  return p_decl_listP(decl_list);
 }
 
 // extern -> "extern" type_spec IDENT "(" params ")" ";"
-bool p_extern() {
-  return match(EXTERN) && p_type_spec() && match(IDENT) && match(LPAR) && p_params() && match(RPAR) && match(SC);
+unique_ptr<ExternASTNode> p_extern() {
+  if (!match(EXTERN)) {
+    return nullptr; // Error
+  }
+  int externType = p_type_spec();
+  if (externType == 0) {
+    return nullptr; // Error
+  }
+  TOKEN externName = CurTok;
+  if (!match(IDENT) || !match(LPAR)) {
+    return nullptr; // Error
+  }
+  vector<unique_ptr<VarASTNode>> params = p_params();
+  if (!match(RPAR) || !match(SC)) {
+    return nullptr; // Error
+  }
+
+  return make_unique<ExternASTNode>(externName.lexeme, move(params));
 }
 
 // extern_list' -> extern extern_list' | ϵ
-bool p_extern_listP() {
-  if (contains(first_extern, CurTok.type)) {
-    return p_extern() && p_extern_listP();
-  } else if (contains(follow_extern_listP, CurTok.type)) {
-    return true;
-  } else {
-    return false;
+vector<unique_ptr<ExternASTNode>> p_extern_listP(vector<unique_ptr<ExternASTNode>> &extern_list) {
+  if (!contains(first_extern, CurTok.type)) {
+    if (contains(follow_extern_listP, CurTok.type)) {
+      return extern_list;
+    } else {
+      return {}; // Error
+    }
   }
+  unique_ptr<ExternASTNode> externDecl = p_extern();
+  if (!externDecl) {
+    return {}; // Error
+  }
+  extern_list.push_back(move(externDecl));
+
+  return p_extern_listP(extern_list);
 }
 
 // extern_list -> extern extern_list'
-bool p_extern_list() {
-  return p_extern() && p_extern_listP();
+vector<unique_ptr<ExternASTNode>> p_extern_list() {
+  vector<unique_ptr<ExternASTNode>> extern_list;
+
+  return p_extern_listP(extern_list);
 }
 
 // program -> extern_list decl_list | decl_list
-bool p_program() {
+unique_ptr<ProgramASTNode> p_program() {
   if (contains(first_extern_list, CurTok.type)) {
-    return p_extern_list() && p_decl_list();
+    vector<unique_ptr<ExternASTNode>> externs = p_extern_list();
+    vector<unique_ptr<ASTNode>> decls = p_decl_list();
+
+    return make_unique<ProgramASTNode>(move(externs), move(decls));
   } else if (contains(first_decl_list, CurTok.type)) {
-    return p_decl_list();
+    vector<unique_ptr<ExternASTNode>> externs;
+    vector<unique_ptr<ASTNode>> decls = p_decl_list();
+  
+    return make_unique<ProgramASTNode>(move(externs), move(decls));
   } else {
-    return false;
+    return nullptr;
   }
 }
 
-static void parser() {
+static unique_ptr<ProgramASTNode> parser() {
   getNextToken(); // Consume EOF
+  unique_ptr<ProgramASTNode> program;
 
-  if (p_program() && CurTok.type == EOF_TOK) {
+  if ((program = p_program()) != nullptr && CurTok.type == EOF_TOK) {
     fprintf(stderr, "Parsing Successful\n");
+    return program;
   } else {
     fprintf(stderr, "Parsing Failed\n");
   }
@@ -972,14 +1451,14 @@ static void parser() {
 
 static LLVMContext TheContext;
 static IRBuilder<> Builder(TheContext);
-static std::unique_ptr<Module> TheModule;
+static unique_ptr<Module> TheModule;
 
 //===----------------------------------------------------------------------===//
 // AST Printer
 //===----------------------------------------------------------------------===//
 
 inline llvm::raw_ostream &operator<<(llvm::raw_ostream &os,
-                                     const ASTnode &ast) {
+                                     const ASTNode &ast) {
   os << ast.to_string();
   return os;
 }
@@ -994,7 +1473,7 @@ int main(int argc, char **argv) {
     if (pFile == NULL)
       perror("Error opening file");
   } else {
-    std::cout << "Usage: ./code InputFile\n";
+    cout << "Usage: ./code InputFile\n";
     return 1;
   }
 
@@ -1003,19 +1482,17 @@ int main(int argc, char **argv) {
   columnNo = 1;
 
   // get the first token
-  //getNextToken();
-  //while (CurTok.type != EOF_TOK) {
+  // getNextToken();
+  // while (CurTok.type != EOF_TOK) {
   //  fprintf(stderr, "Token: %s with type %d\n", CurTok.lexeme.c_str(),
   //          CurTok.type);
   //  getNextToken();
   //}
-  //fprintf(stderr, "Lexer Finished\n");
+  // fprintf(stderr, "Lexer Finished\n");
 
   // Make the module, which holds all the code.
-  TheModule = std::make_unique<Module>("mini-c", TheContext);
+  TheModule = make_unique<Module>("mini-c", TheContext);
 
-  // Reset the file pointer to the beginning of the file
-  
   // Run the parser now.
   parser();
   fprintf(stderr, "Parsing Finished\n");
@@ -1023,7 +1500,7 @@ int main(int argc, char **argv) {
   //********************* Start printing final IR **************************
   // Print out all of the generated code into a file called output.ll
   auto Filename = "output.ll";
-  std::error_code EC;
+  error_code EC;
   raw_fd_ostream dest(Filename, EC, sys::fs::OF_None);
 
   if (EC) {
