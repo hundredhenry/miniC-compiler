@@ -33,6 +33,10 @@
 #include <utility>
 #include <vector>
 
+#define RED "\e[0;31m"
+#define GRN "\e[0;32m"
+#define BLU "\e[0;34m"
+
 using namespace llvm;
 using namespace llvm::sys;
 using namespace std;
@@ -130,9 +134,8 @@ static TOKEN returnTok(string lexVal, int tok_type) {
 
 // Read file line by line -- or look for \n and if found add 1 to line number
 // and reset column number to 0
-/// gettok - Return the next token from standard input.
-static TOKEN gettok() {
-
+/// getTok - Return the next token from standard input.
+static TOKEN getTok() {
   static int LastChar = ' ';
   static int NextChar = ' ';
 
@@ -343,7 +346,7 @@ static TOKEN gettok() {
       } while (LastChar != EOF && LastChar != '\n' && LastChar != '\r');
 
       if (LastChar != EOF)
-        return gettok();
+        return getTok();
     } else
       return returnTok("/", DIV);
   }
@@ -362,6 +365,47 @@ static TOKEN gettok() {
   return returnTok(s, int(ThisChar));
 }
 
+static string getTokStr(TOKEN_TYPE type) {
+  switch(type) {
+    case IDENT: return "Name";
+    case ASSIGN: return "=";
+    case LBRA: return "{";
+    case RBRA: return "}";
+    case LPAR: return "(";
+    case RPAR: return ")";
+    case SC: return ";";
+    case COMMA: return ",";
+    case INT_TOK: return "int";
+    case VOID_TOK: return "void";
+    case FLOAT_TOK: return "float";
+    case BOOL_TOK: return "bool";
+    case EXTERN: return "extern";
+    case IF: return "if";
+    case ELSE: return "else";
+    case WHILE: return "while";
+    case RETURN: return "return";
+    case INT_LIT: return "INT_LIT";
+    case FLOAT_LIT: return "FLOAT_LIT";
+    case BOOL_LIT: return "BOOL_LIT";
+    case AND: return "&&";
+    case OR: return "||";
+    case PLUS: return "+";
+    case MINUS: return "-";
+    case ASTERIX: return "*";
+    case DIV: return "/";
+    case MOD: return "%";
+    case NOT: return "!";
+    case EQ: return "==";
+    case NE: return "!=";
+    case LE: return "<=";
+    case LT: return "<";
+    case GE: return ">=";
+    case GT: return ">";
+    case EOF_TOK: return "EOF";
+    default: return "INVALID";
+  }
+}
+
 //===----------------------------------------------------------------------===//
 // Parser
 //===----------------------------------------------------------------------===//
@@ -375,7 +419,7 @@ static deque<TOKEN> tok_buffer;
 static TOKEN getNextToken() {
 
   if (tok_buffer.size() == 0)
-    tok_buffer.push_back(gettok());
+    tok_buffer.push_back(getTok());
 
   TOKEN temp = tok_buffer.front();
   tok_buffer.pop_front();
@@ -415,7 +459,12 @@ class ASTNode {
 public:
   virtual ~ASTNode() {}
   virtual Value *codegen() = 0;
-  virtual string to_string() const { return ""; };
+  virtual string to_string(int indent = 0) const { return ""; };
+
+protected:
+  string indentStr(int indent) const {
+    return string(indent, ' ');
+  }
 };
 
 /// IntASTNode - Class for integer literals.
@@ -426,8 +475,8 @@ class IntASTNode : public ASTNode {
 public:
   IntASTNode(TOKEN tok, int val) : Tok(tok), Val(val) {}
   virtual Value *codegen() override;
-  virtual string to_string() const override {
-    return "IntASTNode: " + ::to_string(Val);
+  virtual string to_string(int indent = 0) const override {
+    return indentStr(indent) + "<" GRN "IntASTNode\e[0m, " RED + ::to_string(Val) + "\e[0m>\n";
   };
 };
 
@@ -439,8 +488,8 @@ class FloatASTNode : public ASTNode {
 public:
   FloatASTNode(TOKEN tok, float val) : Tok(tok), Val(val) {}
   virtual Value *codegen() override;
-  virtual string to_string() const override {
-    return "FloatASTNode: " + ::to_string(Val);
+  virtual string to_string(int indent = 0) const override {
+    return indentStr(indent) + "<" GRN "FloatASTNode\e[0m, " RED + ::to_string(Val) + "\e[0m>\n";
   };
 };
 
@@ -452,22 +501,24 @@ class BoolASTNode : public ASTNode {
 public:
   BoolASTNode(TOKEN tok, bool val) : Tok(tok), Val(val) {}
   virtual Value *codegen() override;
-  virtual string to_string() const override {
-    return "BoolASTNode: " + ::to_string(Val);
+  virtual string to_string(int indent = 0) const override {
+    return indentStr(indent) + "<" GRN "BoolASTNode\e[0m, " RED + ::to_string(Val) + "\e[0m>\n";
   };
 };
 
 /// VarASTNode - Class for variable declarations.
 class VarASTNode : public ASTNode {
   TOKEN Tok;
-  int Type;
+  TOKEN_TYPE Type;
   string Name;
 
 public:
-  VarASTNode(TOKEN tok, int type, const string &name)
-      : Tok(tok), Type(type), Name(name) {}
+  VarASTNode(TOKEN tok, TOKEN_TYPE type)
+      : Tok(tok), Type(type), Name(tok.lexeme) {}
   virtual Value *codegen() override;
-  virtual string to_string() const override { return "VarASTNode: " + Name; };
+  virtual string to_string(int indent = 0) const override { 
+    return indentStr(indent) + "<" GRN "VarASTNode\e[0m, " RED + Name + "\e[0m: " + RED + getTokStr(Type) + "\e[0m>\n";
+  }
 };
 
 /// VarReferenceASTNode - Class for variable references.
@@ -476,10 +527,10 @@ class VarReferenceASTNode : public ASTNode {
   string Name;
 
 public:
-  VarReferenceASTNode(TOKEN tok, const string &name) : Tok(tok), Name(name) {}
+  VarReferenceASTNode(TOKEN tok) : Tok(tok), Name(tok.lexeme) {}
   virtual Value *codegen() override;
-  virtual string to_string() const override {
-    return "VarRefereneASTNode: " + Name;
+  virtual string to_string(int indent = 0) const override {
+    return indentStr(indent) + "<" GRN "VarReferenceASTNode\e[0m, " RED + Name + "\e[0m>\n";
   };
 };
 
@@ -490,11 +541,14 @@ class UnaryASTNode : public ASTNode {
   unique_ptr<ASTNode> Operand;
 
 public:
-  UnaryASTNode(TOKEN tok, int op, unique_ptr<ASTNode> operand)
-      : Tok(tok), Op(op), Operand(std::move(operand)) {}
+  UnaryASTNode(TOKEN tok, unique_ptr<ASTNode> operand)
+      : Tok(tok), Op(Tok.type), Operand(std::move(operand)) {}
   virtual Value *codegen() override;
-  virtual string to_string() const override {
-    return "UnaryASTNode: " + ::to_string(Op);
+  virtual string to_string(int indent = 0) const override {
+    string s = indentStr(indent) + "<" GRN "UnaryASTNode\e[0m, " RED + Tok.lexeme + "\e[0m>\n";
+    s += Operand->to_string(indent + 1);
+
+    return s;
   };
 };
 
@@ -505,12 +559,16 @@ class BinaryASTNode : public ASTNode {
   unique_ptr<ASTNode> LHS, RHS;
 
 public:
-  BinaryASTNode(TOKEN tok, int op, unique_ptr<ASTNode> lhs,
+  BinaryASTNode(TOKEN tok, unique_ptr<ASTNode> lhs,
                 unique_ptr<ASTNode> rhs)
-      : Tok(tok), Op(op), LHS(std::move(lhs)), RHS(std::move(rhs)) {}
+      : Tok(tok), Op(tok.type), LHS(std::move(lhs)), RHS(std::move(rhs)) {}
   virtual Value *codegen() override;
-  virtual string to_string() const override {
-    return "BinaryASTNode: " + ::to_string(Op);
+  virtual string to_string(int indent = 0) const override {
+    string s = indentStr(indent) + "<" GRN "BinaryASTNode\e[0m, " RED + Tok.lexeme + "\e[0m>\n";
+    s += LHS->to_string(indent + 1);
+    s += RHS->to_string(indent + 1);
+
+    return s;
   };
 };
 
@@ -521,10 +579,17 @@ class CallASTNode : public ASTNode {
   vector<unique_ptr<ASTNode>> Args;
 
 public:
-  CallASTNode(TOKEN tok, const string &func, vector<unique_ptr<ASTNode>> args)
-      : Tok(tok), Func(func), Args(std::move(args)) {}
+  CallASTNode(TOKEN tok, vector<unique_ptr<ASTNode>> args) : Tok(tok), Func(tok.lexeme), Args(std::move(args)) {}
   virtual Value *codegen() override;
-  virtual string to_string() const override { return "CallASTNode: " + Func; };
+  virtual string to_string(int indent = 0) const override { 
+    string s = indentStr(indent) + "<" GRN "CallASTNode\e[0m, " RED + Func + "\e[0m>\n";
+    s += indentStr(indent) + BLU + "[Arguments]\e[0m\n";
+    for (const unique_ptr<ASTNode> &arg : Args) {
+      s += arg->to_string(indent + 1);
+    }
+
+    return s;
+  };
 };
 
 /// BlockASTNode - Class for blocks.
@@ -537,7 +602,17 @@ public:
                vector<unique_ptr<ASTNode>> stmtList)
       : LocalDecls(std::move(localDecls)), StmtList(std::move(stmtList)) {}
   virtual Value *codegen() override;
-  virtual string to_string() const override { return "BlockASTNode"; };
+  virtual string to_string(int indent = 0) const override { 
+    string s = indentStr(indent) + "<" GRN "BlockASTNode\e[0m>\n";
+    for (const unique_ptr<VarASTNode> &decl : LocalDecls) {
+      s += decl->to_string(indent + 1);
+    }
+    for (const unique_ptr<ASTNode> &stmt : StmtList) {
+      s += stmt->to_string(indent + 1);
+    }
+
+    return s;
+  };
 };
 
 /// IfASTNode - Class for if statements.
@@ -549,10 +624,21 @@ class IfASTNode : public ASTNode {
 public:
   IfASTNode(TOKEN tok, unique_ptr<ASTNode> cond, unique_ptr<BlockASTNode> then,
             unique_ptr<BlockASTNode> els)
-      : Tok(tok), Cond(std::move(cond)), Then(std::move(then)),
-        Else(std::move(els)) {}
+      : Tok(tok), Cond(std::move(cond)), Then(std::move(then)), Else(std::move(els)) {}
   virtual Value *codegen() override;
-  virtual string to_string() const override { return "IfASTNode"; };
+  virtual string to_string(int indent = 0) const override {
+    string s = indentStr(indent) + "<" GRN "IfASTNode\e[0m>\n";
+    s += indentStr(indent) + BLU + "[Condition]\e[0m\n";
+    s += Cond->to_string(indent + 1);
+    s += indentStr(indent) + BLU + "[Then]\e[0m\n";
+    s += Then->to_string(indent + 1);
+    if (Else) {
+      s += indentStr(indent) + BLU + "[Else]\e[0m\n";
+      s += Else->to_string(indent + 1);
+    }
+
+    return s;
+  };
 };
 
 /// WhileASTNode - Class for while statements.
@@ -565,7 +651,15 @@ public:
   WhileASTNode(TOKEN tok, unique_ptr<ASTNode> cond, unique_ptr<ASTNode> stmt)
       : Tok(tok), Cond(std::move(cond)), Stmt(std::move(stmt)) {}
   virtual Value *codegen() override;
-  virtual string to_string() const override { return "WhileASTNode"; };
+  virtual string to_string(int indent = 0) const override {
+    string s = indentStr(indent) + "<" GRN "WhileASTNode\e[0m>\n";
+    s += indentStr(indent) + BLU + "[Condition]\e[0m\n";
+    s += Cond->to_string(indent + 1);
+    s += indentStr(indent) + BLU + "[Statement]\e[0m\n";
+    s += Stmt->to_string(indent + 1);
+
+    return s;
+  };
 };
 
 /// ReturnASTNode - Class for return statements.
@@ -574,41 +668,61 @@ class ReturnASTNode : public ASTNode {
   unique_ptr<ASTNode> Expr;
 
 public:
-  ReturnASTNode(TOKEN tok, unique_ptr<ASTNode> expr)
-      : Tok(tok), Expr(std::move(expr)) {}
+  ReturnASTNode(TOKEN tok, unique_ptr<ASTNode> expr) : Tok(tok), Expr(std::move(expr)) {}
   virtual Value *codegen() override;
-  virtual string to_string() const override { return "ReturnASTNode"; };
+  virtual string to_string(int indent = 0) const override { 
+    string s = indentStr(indent) + "<" GRN "ReturnASTNode\e[0m>\n";
+    s += Expr->to_string(indent + 1);
+
+    return s;
+  };
 };
 
 /// ExternASTNode - Class for extern declarations.
 class ExternASTNode : public ASTNode {
+  TOKEN_TYPE Type;
   string Name;
-  vector<unique_ptr<VarASTNode>> Args;
+  vector<unique_ptr<VarASTNode>> Params;
 
 public:
-  ExternASTNode(const string &name, vector<unique_ptr<VarASTNode>> args)
-      : Name(name), Args(std::move(args)) {}
+  ExternASTNode(TOKEN_TYPE type, const string &name,
+                vector<unique_ptr<VarASTNode>> params)
+      : Type(type), Name(name), Params(std::move(params)) {}
   virtual Value *codegen() override;
-  virtual string to_string() const override {
-    return "ExternASTNode: " + Name;
+  virtual string to_string(int indent = 0) const override {
+    string s = indentStr(indent) + "<" GRN "ExternASTNode\e[0m, " RED + Name + "\e[0m: " + RED + getTokStr(Type)+ "\e[0m>\n";
+    s += indentStr(indent) + BLU + "[" + Name + " Parameters]\e[0m\n";
+    for (const unique_ptr<VarASTNode> &arg : Params) {
+      s += arg->to_string(indent + 1);
+    }
+
+    return s;
   };
 };
 
 /// FunctionASTNode - Class for function definitions.
 class FunctionASTNode : public ASTNode {
-  int Type;
+  TOKEN_TYPE Type;
   string Name;
-  vector<unique_ptr<VarASTNode>> Args;
+  vector<unique_ptr<VarASTNode>> Params;
   unique_ptr<BlockASTNode> Body;
 
 public:
-  FunctionASTNode(int type, const string &name,
-                  vector<unique_ptr<VarASTNode>> args,
+  FunctionASTNode(TOKEN_TYPE type, const string &name,
+                  vector<unique_ptr<VarASTNode>> params,
                   unique_ptr<BlockASTNode> body)
-      : Type(type), Name(name), Args(std::move(args)), Body(std::move(body)) {}
+      : Type(type), Name(name), Params(std::move(params)), Body(std::move(body)) {}
   virtual Value *codegen() override;
-  virtual string to_string() const override {
-    return "FunctionASTNode: " + Name;
+  virtual string to_string(int indent = 0) const override {
+    string s = indentStr(indent) + "<" GRN "FunctionASTNode\e[0m, " RED + Name + "\e[0m: " + RED + getTokStr(Type) + "\e[0m>\n";
+    s += indentStr(indent) + BLU + "[" + Name + " Parameters]\e[0m\n";
+    for (const unique_ptr<VarASTNode> &arg : Params) {
+      s += arg->to_string(indent + 1);
+    }
+    s += indentStr(indent) + BLU + "[" + Name + " Body]\e[0m\n";
+    s += Body->to_string(indent + 1);
+
+    return s;
   };
 };
 
@@ -622,7 +736,21 @@ public:
                  vector<unique_ptr<ASTNode>> decls)
       : Externs(std::move(externs)), Decls(std::move(decls)) {}
   virtual Value *codegen() override;
-  virtual string to_string() const override { return "ProgramASTNode"; };
+  virtual string to_string(int indent = 0) const override {
+    string s = indentStr(indent) + "<" GRN "ProgramASTNode\e[0m>\n";
+    if (!Externs.empty()) {
+      s += indentStr(indent) + BLU + "[Externs]\e[0m\n";
+      for (const unique_ptr<ExternASTNode> &ext : Externs) {
+        s += ext->to_string(indent + 1);
+      }
+    }
+    s += indentStr(indent) + BLU "[Declarations]\e[0m\n";
+    for (auto &decl : Decls) {
+      s += decl->to_string(indent + 1);
+    }
+
+    return s;
+  }
 };
 
 //===-----------------------------
@@ -779,8 +907,8 @@ unique_ptr<VarASTNode> p_param();
 vector<unique_ptr<VarASTNode>> p_param_listP(vector<unique_ptr<VarASTNode>> &param_list);
 vector<unique_ptr<VarASTNode>> p_param_list();
 vector<unique_ptr<VarASTNode>> p_params();
-int p_var_type();
-int p_type_spec();
+TOKEN_TYPE p_var_type();
+TOKEN_TYPE p_type_spec();
 unique_ptr<ASTNode> p_decl();
 vector<unique_ptr<ASTNode>> p_decl_listP(vector<unique_ptr<ASTNode>> &decl_list);
 vector<unique_ptr<ASTNode>> p_decl_list();
@@ -875,8 +1003,11 @@ unique_ptr<ASTNode> p_reference() {
     }
   }
   vector<unique_ptr<ASTNode>> args = p_referenceP();
-
-  return make_unique<CallASTNode>(func, func.lexeme, std::move(args));
+  if (args.empty()) {
+    return make_unique<VarReferenceASTNode>(func);
+  } else {
+    return make_unique<CallASTNode>(func, std::move(args));
+  }
 }
 
 // factor -> "(" expr ")" | reference
@@ -910,7 +1041,7 @@ unique_ptr<ASTNode> p_unary() {
     }
   }
 
-  return make_unique<UnaryASTNode>(unaryOp, unaryOp.type, p_unary());
+  return make_unique<UnaryASTNode>(unaryOp, p_unary());
 }
 
 // multiplicative' -> "*" unary multiplicative' | "/" unary multiplicative' |
@@ -924,8 +1055,7 @@ unique_ptr<ASTNode> p_multiplicativeP(unique_ptr<ASTNode> lhs) {
       return nullptr; // Error
     }
   }
-  unique_ptr<BinaryASTNode> multiplicativeExpr = make_unique<BinaryASTNode>(
-      multiplicativeOp, multiplicativeOp.type, std::move(lhs), p_unary());
+  unique_ptr<BinaryASTNode> multiplicativeExpr = make_unique<BinaryASTNode>(multiplicativeOp, std::move(lhs), p_unary());
 
   return p_multiplicativeP(std::move(multiplicativeExpr));
 }
@@ -950,8 +1080,7 @@ unique_ptr<ASTNode> p_additiveP(unique_ptr<ASTNode> lhs) {
       return nullptr; // Error
     }
   }
-  unique_ptr<BinaryASTNode> additiveExpr = make_unique<BinaryASTNode>(
-      additiveOp, additiveOp.type, std::move(lhs), p_multiplicative());
+  unique_ptr<BinaryASTNode> additiveExpr = make_unique<BinaryASTNode>(additiveOp, std::move(lhs), p_multiplicative());
 
   return p_additiveP(std::move(additiveExpr));
 }
@@ -977,8 +1106,7 @@ unique_ptr<ASTNode> p_relationalP(unique_ptr<ASTNode> lhs) {
       return nullptr; // Error
     }
   }
-  unique_ptr<BinaryASTNode> relationalExpr = make_unique<BinaryASTNode>(
-      relationalOp, relationalOp.type, std::move(lhs), p_additive());
+  unique_ptr<BinaryASTNode> relationalExpr = make_unique<BinaryASTNode>(relationalOp, std::move(lhs), p_additive());
 
   return p_relationalP(std::move(relationalExpr));
 }
@@ -1003,8 +1131,7 @@ unique_ptr<ASTNode> p_equalityP(unique_ptr<ASTNode> lhs) {
       return nullptr; // Error
     }
   }
-  unique_ptr<BinaryASTNode> equalityExpr = make_unique<BinaryASTNode>(
-      equalityOp, equalityOp.type, std::move(lhs), p_relational());
+  unique_ptr<BinaryASTNode> equalityExpr = make_unique<BinaryASTNode>(equalityOp, std::move(lhs), p_relational());
 
   return p_equalityP(std::move(equalityExpr));
 }
@@ -1029,8 +1156,7 @@ unique_ptr<ASTNode> p_logical_andP(unique_ptr<ASTNode> lhs) {
       return nullptr; // Error
     }
   }
-  unique_ptr<BinaryASTNode> logicalAndExpr = make_unique<BinaryASTNode>(
-      logicalAndOp, logicalAndOp.type, std::move(lhs), p_equality());
+  unique_ptr<BinaryASTNode> logicalAndExpr = make_unique<BinaryASTNode>(logicalAndOp, std::move(lhs), p_equality());
   return p_logical_andP(std::move(logicalAndExpr));
 }
 
@@ -1054,8 +1180,7 @@ unique_ptr<ASTNode> p_logical_orP(unique_ptr<ASTNode> lhs) {
       return nullptr; // Error
     }
   }
-  unique_ptr<BinaryASTNode> logicalOrExpr = make_unique<BinaryASTNode>(
-      logicalOrOp, logicalOrOp.type, std::move(lhs), p_logical_and());
+  unique_ptr<BinaryASTNode> logicalOrExpr = make_unique<BinaryASTNode>(logicalOrOp, std::move(lhs), p_logical_and());
 
   return p_logical_orP(std::move(logicalOrExpr));
 }
@@ -1083,11 +1208,10 @@ unique_ptr<ASTNode> p_expr() {
       return nullptr; // Error
     }
   }
-  unique_ptr<VarReferenceASTNode> var =
-      make_unique<VarReferenceASTNode>(temp, temp.lexeme);
+  unique_ptr<VarReferenceASTNode> var = make_unique<VarReferenceASTNode>(temp);
   unique_ptr<ASTNode> expr = p_expr();
 
-  return make_unique<BinaryASTNode>(temp, ASSIGN, std::move(var), std::move(expr));
+  return make_unique<BinaryASTNode>(temp, std::move(var), std::move(expr));
 }
 
 // return_stmt -> "return" expr_stmt
@@ -1227,7 +1351,7 @@ vector<unique_ptr<ASTNode>> p_stmt_list() {
 
 // local_decl -> var_type IDENT ";"
 unique_ptr<VarASTNode> p_local_decl() {
-  int varType = p_var_type();
+  TOKEN_TYPE varType = p_var_type();
   if (varType == 0) {
     return nullptr; // Error
   }
@@ -1236,7 +1360,7 @@ unique_ptr<VarASTNode> p_local_decl() {
     return nullptr; // Error
   }
 
-  return make_unique<VarASTNode>(varName, varType, varName.lexeme);
+  return make_unique<VarASTNode>(varName, varType);
 }
 
 // local_decls' -> local_decl local_decls' | ϵ
@@ -1281,7 +1405,7 @@ unique_ptr<BlockASTNode> p_block() {
 
 // param -> var_type IDENT
 unique_ptr<VarASTNode> p_param() {
-  int varType = p_var_type();
+  TOKEN_TYPE varType = p_var_type();
   if (varType == 0) {
     return nullptr; // Error
   }
@@ -1290,7 +1414,7 @@ unique_ptr<VarASTNode> p_param() {
     return nullptr; // Error
   }
 
-  return make_unique<VarASTNode>(varName, varType, varName.lexeme);
+  return make_unique<VarASTNode>(varName, varType);
 }
 
 // param_list' -> "," param param_list' | ϵ
@@ -1338,7 +1462,7 @@ vector<unique_ptr<VarASTNode>> p_params() {
 }
 
 // var_type -> "int" | "float" | "bool"
-int p_var_type() {
+TOKEN_TYPE p_var_type() {
   if (match(INT_TOK)) {
     return INT_TOK;
   } else if (match(FLOAT_TOK)) {
@@ -1346,18 +1470,18 @@ int p_var_type() {
   } else if (match(BOOL_TOK)) {
     return BOOL_TOK;
   } else {
-    return 0; // Error
+    return EOF_TOK; // Error
   }
 }
 
 // type_spec -> var_type | "void"
-int p_type_spec() {
+TOKEN_TYPE p_type_spec() {
   if (contains(first_var_type, CurTok.type)) {
     return p_var_type();
   } else if (match(VOID_TOK)) {
     return VOID_TOK;
   } else {
-    return 0; // Error
+    return EOF_TOK; // Error
   }
 }
 
@@ -1366,10 +1490,10 @@ unique_ptr<ASTNode> p_decl() {
   if (!contains(first_var_type, CurTok.type) && !contains(first_type_spec, CurTok.type)) {
     return nullptr; // Error
   }
-  int declType = p_var_type();
-  if (declType == 0) {
+  TOKEN_TYPE declType = p_var_type();
+  if (declType == EOF_TOK) {
     declType = p_type_spec();
-    if (declType == 0) {
+    if (declType == EOF_TOK) {
       return nullptr; // Error
     }
   }
@@ -1378,7 +1502,7 @@ unique_ptr<ASTNode> p_decl() {
     return nullptr; // Error
   }
   if (match(SC)) {
-    return make_unique<VarASTNode>(declName, declType, declName.lexeme);
+    return make_unique<VarASTNode>(declName, declType);
   }
   if (!match(LPAR)) {
     return nullptr; // Error
@@ -1425,7 +1549,7 @@ unique_ptr<ExternASTNode> p_extern() {
   if (!match(EXTERN)) {
     return nullptr; // Error
   }
-  int externType = p_type_spec();
+  TOKEN_TYPE externType = p_type_spec();
   if (externType == 0) {
     return nullptr; // Error
   }
@@ -1438,7 +1562,7 @@ unique_ptr<ExternASTNode> p_extern() {
     return nullptr; // Error
   }
 
-  return make_unique<ExternASTNode>(externName.lexeme, std::move(params));
+  return make_unique<ExternASTNode>(externType, externName.lexeme, std::move(params));
 }
 
 // extern_list' -> extern extern_list' | ϵ
@@ -1489,7 +1613,7 @@ static unique_ptr<ProgramASTNode> parser() {
 
   if ((program = p_program()) != nullptr && CurTok.type == EOF_TOK) {
     fprintf(stderr, "Parsing Successful\n");
-    return program;
+    return std::move(program);
   } else {
     fprintf(stderr, "Parsing Failed\n");
     return nullptr;
@@ -1605,8 +1729,9 @@ int main(int argc, char **argv) {
   TheModule = make_unique<Module>("mini-c", TheContext);
 
   // Run the parser now.
-  parser();
+  unique_ptr<ProgramASTNode> program = parser();
   fprintf(stderr, "Parsing Finished\n");
+  llvm::outs() << *program << "\n";
 
   //********************* Start printing final IR **************************
   // Print out all of the generated code into a file called output.ll
