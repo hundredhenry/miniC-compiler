@@ -40,6 +40,7 @@ function validate {
 
 echo "Test *****"
 
+# core tests (gihan)
 addition=1
 factorial=1
 fibonacci=1
@@ -51,6 +52,25 @@ unary=1
 palindrome=1
 recurse=1
 rfact=1
+
+# medium tests (edmund)
+example_scope=1
+long=1
+truthiness=1
+widening=1
+fail=1
+
+# hard tests (various (compiled by codethulu))
+assign=1
+associativity=1
+global=1
+infinite=0 # this infinitely loops, test manually
+lazyeval=1 # only turn on for boolean short-circuiting
+returns=1
+scope=1
+unary2=1 # if you turn this on, you deserve what you get
+while2=1
+two_return=1
 
 cd tests/addition/
 
@@ -165,4 +185,326 @@ then
 	validate "./palindrome"
 fi
 
+echo "***** ALL BASE TESTS PASSED *****"
+
+if [ $example_scope == 1 ];
+then	
+	cd ../example_scope
+	pwd
+	rm -rf output.ll example_scope
+	"$COMP" ./example_scope.c
+	$CLANG driver.cpp output.ll -o example_scope
+	validate "./example_scope"
+fi
+
+if [ $long == 1 ];
+then	
+	cd ../long
+	pwd
+	rm -rf output.ll long
+	"$COMP" ./long.c
+	$CLANG driver.cpp output.ll -o long
+	validate "./long"
+fi
+
+if [ $truthiness == 1 ];
+then	
+	cd ../truthiness
+	pwd
+	rm -rf output.ll truthiness
+	"$COMP" ./truthiness.c
+	$CLANG driver.cpp output.ll -o truthiness
+	validate "./truthiness"
+fi
+
+if [ $widening == 1 ];
+then	
+	cd ../widening
+	pwd
+	rm -rf output.ll widening
+	"$COMP" ./widening.c
+	$CLANG driver.cpp output.ll -o widening
+	validate "./widening"
+fi
+
+if [ $fail == 1 ];
+then
+	cd ../fail
+	pwd
+	echo "./call_undefined.c"
+
+	if "$COMP" ./call_undefined.c; then
+		echo "TEST FAILED *****"
+		echo "Expected semantic error in 'call_undefined.c'! for example clang:"
+		clang ./call_undefined.c
+		exit 1;
+	else
+		echo "TEST PASSED *****"
+		echo "Got semantic error! Compare with clang:"
+		clang ./call_undefined.c || true
+	fi
+
+	echo "./double_func_mismatched.c"
+	if "$COMP" ./double_func_mismatched.c; then
+		echo "TEST FAILED *****"
+		echo "Expected semantic error in 'double_func_mismatched.c'! for example clang:"
+		clang ./double_func_mismatched.c
+		exit 1;
+	else
+		echo "TEST PASSED *****"
+		echo "Got semantic error! Compare with clang:"
+		clang ./double_func_mismatched.c || true
+	fi
+
+	echo "./double_func.c"
+	if "$COMP" ./double_func.c; then
+		echo "TEST FAILED *****"
+		echo "Expected semantic error in 'double_func.c'! for example clang:"
+		clang ./double_func.c
+		exit 1;
+	else
+		echo "TEST PASSED *****"
+		echo "Got semantic error! Compare with clang:"
+		clang ./double_func.c || true
+	fi
+
+	echo "./double_global.c"
+	if "$COMP" ./double_global.c; then
+		echo "TEST FAILED *****"
+		echo "Expected semantic error in 'double_global.c'!"
+		clang ./double_global.c
+		exit 1;
+	else
+		echo "TEST PASSED *****"
+		echo "Got semantic error!"
+		clang ./double_global.c || true
+	fi
+
+	echo "./double_local.c"
+	if "$COMP" ./double_local.c; then
+		echo "TEST FAILED *****"
+		echo "Expected semantic error in 'double_local'! for example clang:"
+		clang ./double_local.c
+		exit 1;
+	else
+		echo "TEST PASSED *****"
+		echo "Got semantic error! Compare with clang:"
+		clang ./double_local.c || true
+	fi
+
+	echo "./extern_fun_decl_mismatch.c"
+	if "$COMP" ./extern_fun_decl_mismatch.c; then
+		echo "TEST FAILED *****"
+		echo "Expected semantic error in 'extern_fun_decl_mismatch.c'! for example clang:"
+		clang ./extern_fun_decl_mismatch.c
+		exit 1;
+	else
+		echo "TEST PASSED *****"
+		echo "Got semantic error! Compare with clang:"
+		clang ./extern_fun_decl_mismatch.c || true
+	fi
+
+	echo "./no_init_assign.c"
+	if "$COMP" ./no_init_assign.c; then
+		echo "TEST FAILED *****"
+		echo "Expected semantic error in 'no_init_assign.c'! for example clang:"
+		clang ./no_init_assign.c
+		exit 1;
+	else
+		echo "TEST PASSED *****"
+		echo "Got semantic error! Compare with clang:"
+		clang ./no_init_assign.c || true
+	fi
+
+	echo "./scope_bleed.c"
+	if "$COMP" ./scope_bleed.c; then
+		echo "TEST FAILED *****"
+		echo "Expected semantic error in 'scope_bleed.c'! for example clang:"
+		clang ./scope_bleed.c
+		exit 1;
+	else
+		echo "TEST PASSED *****"
+		echo "Got semantic error! Compare with clang:"
+		clang ./scope_bleed.c || true
+	fi
+
+	echo "./undefined_var.c"
+	if "$COMP" ./undefined_var.c; then
+		echo "TEST FAILED *****"
+		echo "Expected semantic error in 'undefined_var.c'! for example clang:"
+		clang ./undefined_var.c
+		exit 1;
+	else
+		echo "TEST PASSED *****"
+		echo "Got semantic error! Compare with clang:"
+		clang ./undefined_var.c || true
+	fi
+
+	echo "./unexpected_ret.c"
+	if "$COMP" ./unexpected_ret.c; then
+		echo "TEST FAILED *****"
+		echo "Expected semantic error in 'unexpected_ret.c'! for example clang:"
+		clang ./unexpected_ret.c
+		exit 1;
+	else
+		echo "TEST PASSED *****"
+		echo "Got semantic error! Compare with clang:"
+		clang ./unexpected_ret.c || true
+	fi
+
+	echo "./wrong_num_args.c"
+	if "$COMP" ./wrong_num_args.c; then
+		echo "TEST FAILED *****"
+		echo "Expected semantic error in 'wrong_num_args.c'! for example clang:"
+		clang ./wrong_num_args.c
+		exit 1;
+	else
+		echo "TEST PASSED *****"
+		echo "Got semantic error! Compare with clang:"
+		clang ./wrong_num_args.c || true
+	fi
+
+	echo "./wrong_type_args.c"
+	if "$COMP" ./wrong_type_args.c; then
+		echo "TEST FAILED *****"
+		echo "Expected semantic error in 'wrong_type_args.c'!"
+		clang ./wrong_type_args.c
+		exit 1;
+	else
+		echo "TEST PASSED *****"
+		echo "Got semantic error!"
+		clang ./wrong_type_args.c || true
+	fi
+
+	echo "./wrong_type_ret.c"
+	if "$COMP" ./wrong_type_ret.c; then
+		echo "TEST FAILED *****"
+		echo "Expected semantic error in 'wrong_type_ret.c'!"
+		clang ./wrong_type_ret.c
+		exit 1;
+	else
+		echo "TEST PASSED *****"
+		echo "Got semantic error!"
+		clang ./wrong_type_ret.c || true
+	fi
+
+	echo "./no_return.c"
+	if "$COMP" ./no_return.c; then
+		echo "TEST FAILED *****"
+		echo "Expected semantic error in 'no_return.c'!"
+		clang ./no_return.c
+		exit 1;
+	else
+		echo "TEST PASSED *****"
+		echo "Got semantic error!"
+		clang ./no_return.c || true
+	fi
+fi
+
+echo "***** ALL MEDIUM TESTS PASSED *****"
+
+if [ $assign == 1 ];
+then	
+	cd ../assign
+	pwd
+	rm -rf output.ll assign
+	"$COMP" ./assign.c
+	$CLANG driver.cpp output.ll -o assign
+	validate "./assign"
+fi
+
+if [ $associativity == 1 ];
+then	
+	cd ../associativity
+	pwd
+	rm -rf output.ll associativity
+	"$COMP" ./associativity.c
+	$CLANG driver.cpp output.ll -o associativity
+	validate "./associativity"
+fi
+
+if [ $global == 1 ];
+then	
+	cd ../global
+	pwd
+	rm -rf output.ll global
+	"$COMP" ./global.c
+	$CLANG driver.cpp output.ll -o global
+	validate "./global"
+fi
+
+if [ $infinite == 1 ];
+then	
+	cd ../infinite
+	pwd
+	rm -rf output.ll infinite
+	"$COMP" ./infinite.c
+	$CLANG driver.cpp output.ll -o infinite
+	validate "./infinite"
+fi
+
+if [ $lazyeval == 1 ];
+then	
+	cd ../lazyeval
+	pwd
+	rm -rf output.ll lazyeval
+	"$COMP" ./lazyeval.c
+	$CLANG driver.cpp output.ll -o lazyeval
+	validate "./lazyeval"
+fi
+
+if [ $returns == 1 ];
+then	
+	cd ../returns
+	pwd
+	rm -rf output.ll returns
+	"$COMP" ./returns.c
+	$CLANG driver.cpp output.ll -o returns
+	validate "./returns"
+fi
+
+if [ $scope == 1 ];
+then	
+	cd ../scope
+	pwd
+	rm -rf output.ll scope
+	"$COMP" ./scope.c
+	$CLANG driver.cpp output.ll -o scope
+	validate "./scope"
+fi
+
+if [ $unary2 == 1 ];
+then	
+	cd ../unary2
+	pwd
+	rm -rf output.ll unary2
+	"$COMP" ./unary2.c
+	$CLANG driver.cpp output.ll -o unary2
+	validate "./unary2"
+fi
+
+if [ $while2 == 1 ];
+then	
+	cd ../while2
+	pwd
+	rm -rf output.ll while
+	"$COMP" ./while.c
+	$CLANG driver.cpp output.ll -o while
+	validate "./while"
+fi
+
+if [ $two_return == 1 ];
+then	
+	cd ../two_return
+	pwd
+	rm -rf output.ll two_return
+	"$COMP" ./two_return.c
+	$CLANG driver.cpp output.ll -o two_return
+	validate "./two_return"
+fi
+
+echo "***** ALL HARD TESTS PASSED *****"
+
 echo "***** ALL TESTS PASSED *****"
+
+echo "https://tenor.com/en-GB/view/frodo-baggins-its-over-its-done-lotr-gif-12920799"
