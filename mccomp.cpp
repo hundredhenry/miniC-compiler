@@ -24,6 +24,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <llvm/IR/GlobalValue.h>
+#include <llvm/IR/GlobalVariable.h>
 #include <map>
 #include <memory>
 #include <queue>
@@ -161,8 +163,6 @@ static TOKEN getTok() {
 
     if (IdentifierStr == "int")
       return returnTok("int", INT_TOK);
-    if (IdentifierStr == "bool")
-      return returnTok("bool", BOOL_TOK);
     if (IdentifierStr == "float")
       return returnTok("float", FLOAT_TOK);
     if (IdentifierStr == "void")
@@ -306,7 +306,6 @@ static TOKEN getTok() {
       LastChar = NextChar;
       columnNo++;
       return returnTok("!", NOT);
-      ;
     }
   }
 
@@ -402,7 +401,8 @@ static string getTokStr(TOKEN_TYPE type) {
     case GE: return ">=";
     case GT: return ">";
     case EOF_TOK: return "EOF";
-    default: return "INVALID";
+    case INVALID: return "INVALID";
+    default: return "UNKNOWN";
   }
 }
 
@@ -514,28 +514,31 @@ public:
 /// VarASTNode - Class for variable declarations.
 class VarASTNode : public ASTNode {
   TOKEN Tok;
-  TOKEN_TYPE Type;
-  string Name;
+  TOKEN_TYPE VarType;
+  string VarName;
+  bool global;
 
 public:
-  VarASTNode(TOKEN tok, TOKEN_TYPE type)
-      : Tok(tok), Type(type), Name(tok.lexeme) {}
+  VarASTNode(TOKEN tok, TOKEN_TYPE type, bool global = false)
+      : Tok(tok), VarType(type), VarName(tok.lexeme), global(global) {}
+  TOKEN_TYPE getVarType() { return VarType; }
+  string getVarName() { return VarName; }
   virtual Value *codegen() override;
   virtual string to_string(int indent = 0) const override { 
-    return indentStr(indent) + "<" GRN "VarASTNode\e[0m, " RED + Name + "\e[0m: " + RED + getTokStr(Type) + "\e[0m>\n";
+    return indentStr(indent) + "<" GRN "VarASTNode\e[0m, " RED + VarName + "\e[0m: " + RED + getTokStr(VarType) + "\e[0m>\n";
   }
 };
 
 /// VarReferenceASTNode - Class for variable references.
 class VarReferenceASTNode : public ASTNode {
   TOKEN Tok;
-  string Name;
+  string VarName;
 
 public:
-  VarReferenceASTNode(TOKEN tok) : Tok(tok), Name(tok.lexeme) {}
+  VarReferenceASTNode(TOKEN tok) : Tok(tok), VarName(tok.lexeme) {}
   virtual Value *codegen() override;
   virtual string to_string(int indent = 0) const override {
-    return indentStr(indent) + "<" GRN "VarReferenceASTNode\e[0m, " RED + Name + "\e[0m>\n";
+    return indentStr(indent) + "<" GRN "VarReferenceASTNode\e[0m, " RED + VarName + "\e[0m>\n";
   };
 };
 
@@ -580,14 +583,14 @@ public:
 /// CallASTNode - Class for function calls.
 class CallASTNode : public ASTNode {
   TOKEN Tok;
-  string Func;
+  string FuncName;
   vector<unique_ptr<ASTNode>> Args;
 
 public:
-  CallASTNode(TOKEN tok, vector<unique_ptr<ASTNode>> args) : Tok(tok), Func(tok.lexeme), Args(std::move(args)) {}
+  CallASTNode(TOKEN tok, vector<unique_ptr<ASTNode>> args) : Tok(tok), FuncName(tok.lexeme), Args(std::move(args)) {}
   virtual Value *codegen() override;
   virtual string to_string(int indent = 0) const override { 
-    string s = indentStr(indent) + "<" GRN "CallASTNode\e[0m, " RED + Func + "\e[0m>\n";
+    string s = indentStr(indent) + "<" GRN "CallASTNode\e[0m, " RED + FuncName + "\e[0m>\n";
     s += indentStr(indent) + BLU + "[Arguments]\e[0m\n";
     for (const unique_ptr<ASTNode> &arg : Args) {
       s += arg->to_string(indent + 1);
@@ -683,20 +686,19 @@ public:
   };
 };
 
-/// ExternASTNode - Class for extern declarations.
-class ExternASTNode : public ASTNode {
-  TOKEN_TYPE Type;
-  string Name;
+class PrototypeASTNode : public ASTNode {
+  TOKEN_TYPE FuncType;
+  string FuncName;
   vector<unique_ptr<VarASTNode>> Params;
 
 public:
-  ExternASTNode(TOKEN_TYPE type, const string &name,
-                vector<unique_ptr<VarASTNode>> params)
-      : Type(type), Name(name), Params(std::move(params)) {}
-  virtual Value *codegen() override;
+  PrototypeASTNode(TOKEN_TYPE type, const string &name,
+                   vector<unique_ptr<VarASTNode>> params)
+      : FuncType(type), FuncName(name), Params(std::move(params)) {}
+  string getFuncName() { return FuncName; }
+  virtual Function *codegen() override;
   virtual string to_string(int indent = 0) const override {
-    string s = indentStr(indent) + "<" GRN "ExternASTNode\e[0m, " RED + Name + "\e[0m: " + RED + getTokStr(Type)+ "\e[0m>\n";
-    s += indentStr(indent) + BLU + "[" + Name + " Parameters]\e[0m\n";
+    string s = indentStr(indent) + "<" GRN "PrototypeASTNode\e[0m, " RED + FuncName + "\e[0m: " + RED + getTokStr(FuncType) + "\e[0m>\n";
     for (const unique_ptr<VarASTNode> &arg : Params) {
       s += arg->to_string(indent + 1);
     }
@@ -705,26 +707,35 @@ public:
   };
 };
 
+/// ExternASTNode - Class for extern declarations.
+class ExternASTNode : public ASTNode {
+  unique_ptr<PrototypeASTNode> Proto;
+
+public:
+  ExternASTNode(unique_ptr<PrototypeASTNode> proto) : Proto(std::move(proto)) {}
+  virtual Function *codegen() override;
+  virtual string to_string(int indent = 0) const override {
+    string s = indentStr(indent) + "<" GRN "ExternASTNode\e[0m>\n";
+    s += Proto->to_string(indent + 1);
+
+    return s;
+  };
+};
+
 /// FunctionASTNode - Class for function definitions.
 class FunctionASTNode : public ASTNode {
-  TOKEN_TYPE Type;
-  string Name;
-  vector<unique_ptr<VarASTNode>> Params;
+  unique_ptr<PrototypeASTNode> Proto;
   unique_ptr<BlockASTNode> Body;
 
 public:
-  FunctionASTNode(TOKEN_TYPE type, const string &name,
-                  vector<unique_ptr<VarASTNode>> params,
+  FunctionASTNode(unique_ptr<PrototypeASTNode> proto,
                   unique_ptr<BlockASTNode> body)
-      : Type(type), Name(name), Params(std::move(params)), Body(std::move(body)) {}
-  virtual Value *codegen() override;
+      : Proto(std::move(proto)), Body(std::move(body)) {}
+  virtual Function *codegen() override;
   virtual string to_string(int indent = 0) const override {
-    string s = indentStr(indent) + "<" GRN "FunctionASTNode\e[0m, " RED + Name + "\e[0m: " + RED + getTokStr(Type) + "\e[0m>\n";
-    s += indentStr(indent) + BLU + "[" + Name + " Parameters]\e[0m\n";
-    for (const unique_ptr<VarASTNode> &arg : Params) {
-      s += arg->to_string(indent + 1);
-    }
-    s += indentStr(indent) + BLU + "[" + Name + " Body]\e[0m\n";
+    string s = indentStr(indent) + "<" GRN "FunctionASTNode\e[0m>\n";
+    s += Proto->to_string(indent + 1);
+    s += indentStr(indent) + BLU + "[Body]\e[0m\n";
     s += Body->to_string(indent + 1);
 
     return s;
@@ -1288,7 +1299,6 @@ unique_ptr<ASTNode> p_stmt() {
     return p_return_stmt();
   } else {
     error("Found invalid token " + CurTok.lexeme, CurTok.lineNo, CurTok.columnNo);
-    return nullptr;
   }
 }
 
@@ -1427,7 +1437,6 @@ TOKEN_TYPE p_var_type() {
     return BOOL_TOK;
   } else {
     error("Expected 'int', 'float', or 'bool' but found " + CurTok.lexeme, CurTok.lineNo, CurTok.columnNo);
-    return EOF_TOK;
   }
 }
 
@@ -1439,7 +1448,6 @@ TOKEN_TYPE p_type_spec() {
     return VOID_TOK;
   } else {
     error("Expected 'int', 'float', 'bool', or 'void' but found " + CurTok.lexeme, CurTok.lineNo, CurTok.columnNo);
-    return EOF_TOK;
   }
 }
 
@@ -1457,7 +1465,7 @@ unique_ptr<ASTNode> p_decl() {
     if (declType == VOID_TOK) {
       error("Variable declaration cannot have type 'void'", CurTok.lineNo, CurTok.columnNo);
     }
-    return make_unique<VarASTNode>(declName, declType);
+    return make_unique<VarASTNode>(declName, declType, true);
   }
   if (!match(LPAR)) {
     error("Expected '(' but found " + CurTok.lexeme, CurTok.lineNo, CurTok.columnNo);
@@ -1466,9 +1474,10 @@ unique_ptr<ASTNode> p_decl() {
   if (!match(RPAR)) {
     error("Expected ')' but found " + CurTok.lexeme, CurTok.lineNo, CurTok.columnNo);
   }
+  unique_ptr<PrototypeASTNode> proto = make_unique<PrototypeASTNode>(declType, declName.lexeme, std::move(params));
   unique_ptr<BlockASTNode> block = p_block();
 
-  return make_unique<FunctionASTNode>(declType, declName.lexeme, std::move(params), std::move(block));
+  return make_unique<FunctionASTNode>(std::move(proto), std::move(block));
 }
 
 // decl_list' -> decl decl_list' | ϵ
@@ -1513,8 +1522,9 @@ unique_ptr<ExternASTNode> p_extern() {
   if (!match(SC)) {
     error("Expected ';' but found " + CurTok.lexeme, CurTok.lineNo, CurTok.columnNo);
   }
+  unique_ptr<PrototypeASTNode> proto = make_unique<PrototypeASTNode>(externType, externName.lexeme, std::move(params));
 
-  return make_unique<ExternASTNode>(externType, externName.lexeme, std::move(params));
+  return make_unique<ExternASTNode>(std::move(proto));
 }
 
 // extern_list' -> extern extern_list' | ϵ
@@ -1553,15 +1563,14 @@ unique_ptr<ProgramASTNode> p_program() {
     return make_unique<ProgramASTNode>(std::move(externs), std::move(decls));
   } else {
     error("Found invalid token " + CurTok.lexeme, CurTok.lineNo, CurTok.columnNo);
-    return nullptr;
   }
 }
 
 static unique_ptr<ProgramASTNode> parser() {
   getNextToken(); // Consume EOF
-  unique_ptr<ProgramASTNode> program;
+  unique_ptr<ProgramASTNode> program = p_program();
 
-  if ((program = p_program()) != nullptr && CurTok.type == EOF_TOK) {
+  if (CurTok.type == EOF_TOK) {
     fprintf(stderr, "Parsing Successful\n");
     return std::move(program);
   } else {
@@ -1577,29 +1586,141 @@ static unique_ptr<ProgramASTNode> parser() {
 static LLVMContext TheContext;
 static IRBuilder<> Builder(TheContext);
 static unique_ptr<Module> TheModule;
+static map<string, AllocaInst*> NamedValues;
+static map<string, GlobalVariable*> GlobalNamedValues;
+
+static AllocaInst* CreateEntryBlockAlloca(Function *TheFunction, const string &VarName, Type *VarType) {
+  IRBuilder<> TmpB(&TheFunction->getEntryBlock(), TheFunction->getEntryBlock().begin());
+  return TmpB.CreateAlloca(VarType, 0, VarName.c_str());
+}
+
+static Type *getLLVMType(TOKEN_TYPE type) {
+  switch (type) {
+  case BOOL_TOK:
+    return Type::getInt1Ty(TheContext);
+  case FLOAT_TOK:
+    return Type::getFloatTy(TheContext);
+  case INT_TOK:
+    return Type::getInt32Ty(TheContext);
+  case VOID_TOK:
+    return Type::getVoidTy(TheContext);
+  default:
+    return nullptr;
+  }
+}
 
 Value *IntASTNode::codegen() {
-  return nullptr;
+  return ConstantInt::get(TheContext, APInt(32, Val, true));
 }
 
 Value *FloatASTNode::codegen() {
-  return nullptr;
+  return ConstantFP::get(TheContext, APFloat(Val));
 }
 
 Value *BoolASTNode::codegen() {
-  return nullptr;
+  return ConstantInt::get(TheContext, APInt(1, Val, true));
 }
 
 Value *VarASTNode::codegen() {
-  return nullptr;
+  Type *type = getLLVMType(VarType);
+  
+  if (global) {
+    if (GlobalNamedValues.find(VarName) != GlobalNamedValues.end()) {
+      return nullptr; // Error, global variable with the same name already declared
+    }
+    GlobalVariable *globalVar = new GlobalVariable(*TheModule, type, false, GlobalValue::CommonLinkage, Constant::getNullValue(type), VarName);
+    globalVar->setAlignment(MaybeAlign(8));
+    GlobalNamedValues[VarName] = globalVar;
+
+    return globalVar;
+  } else {
+    if (NamedValues.find(VarName) != NamedValues.end()) {
+      return nullptr; // Error, variable with the same name already declared
+    }
+    AllocaInst *alloca = CreateEntryBlockAlloca(Builder.GetInsertBlock()->getParent(), VarName, type);
+    NamedValues[VarName] = alloca;
+
+    return alloca;
+  }
 }
 
 Value *VarReferenceASTNode::codegen() {
-  return nullptr;
+  if (NamedValues.find(VarName) != NamedValues.end()) {
+    return NamedValues[VarName];
+  } else if (GlobalNamedValues.find(VarName) != GlobalNamedValues.end()) {
+    return GlobalNamedValues[VarName];
+  } else {
+    return nullptr; // Error, variable not declared
+  }
+}
+
+Function *PrototypeASTNode::codegen() {
+  // Make the function type
+  vector<Type*> argTypes(Params.size());
+  for (auto &param : Params) {
+    argTypes.push_back(getLLVMType(param->getVarType()));
+  }
+  FunctionType *funcType = FunctionType::get(getLLVMType(FuncType), argTypes, false);
+  Function *func = Function::Create(funcType, Function::ExternalLinkage, FuncName, TheModule.get());
+
+  // Set names for all arguments
+  unsigned idx = 0;
+  for (auto &arg : func->args()) {
+    arg.setName(Params[idx++]->getVarName());
+  }
+
+  return func;
+}
+
+Function *ExternASTNode::codegen() {
+  return Proto->codegen();
+}
+
+Function *FunctionASTNode::codegen() {
+  Function *TheFunction = TheModule->getFunction(Proto->getFuncName());
+
+  if (!TheFunction) {
+    TheFunction = Proto->codegen();
+  }
+  if(TheFunction) {
+    return nullptr;
+  }
+  BasicBlock *BB = BasicBlock::Create(TheContext, "func", TheFunction);
+  Builder.SetInsertPoint(BB);
+
+  // Record the functiion in the NamedValues map.
+  NamedValues.clear();
+  for (auto &arg : TheFunction->args()) {
+    AllocaInst *alloca = CreateEntryBlockAlloca(TheFunction, arg.getName().data(), arg.getType());
+    Builder.CreateStore(&arg, alloca);
+    NamedValues[arg.getName().data()] = alloca;
+  }
+
+  if (Value *retVal = Body->codegen()) {
+    Builder.CreateRet(retVal);
+  }
+  verifyFunction(*TheFunction);
+
+  return TheFunction;
 }
 
 Value *CallASTNode::codegen() {
-  return nullptr;
+  Function* calleeFunc = TheModule->getFunction(FuncName);
+  if (!calleeFunc) {
+    return nullptr; // Error, unknown function referenced
+  }
+  if (calleeFunc->arg_size() != Args.size()) {
+    return nullptr; // Error, incorrect number of arguments passed
+  }
+  vector<Value*> argsV;
+  for (auto &arg : Args) {
+    argsV.push_back(arg->codegen());
+    if (!argsV.back()) {
+      return nullptr; // Error, argument code generation failed
+    }
+  }
+
+  return Builder.CreateCall(calleeFunc, argsV, "calltmp");
 }
 
 Value *UnaryASTNode::codegen() {
@@ -1626,14 +1747,6 @@ Value *BlockASTNode::codegen() {
   return nullptr;
 }
 
-Value *FunctionASTNode::codegen() {
-  return nullptr;
-}
-
-Value *ExternASTNode::codegen() {
-  return nullptr;
-}
-
 Value *ProgramASTNode::codegen() {
   return nullptr;
 }
@@ -1653,12 +1766,14 @@ inline llvm::raw_ostream &operator<<(llvm::raw_ostream &os,
 //===----------------------------------------------------------------------===//
 
 int main(int argc, char **argv) {
-  if (argc == 2) {
-    pFile = fopen(argv[1], "r");
-    if (pFile == NULL)
-      perror("Error opening file");
-  } else {
-    cout << "Usage: ./code InputFile\n";
+  if (argc != 2) {
+    fprintf(stderr, "Usage: ./code InputFile\n");
+    return 1;
+  }
+  
+  pFile = fopen(argv[1], "r");
+  if (pFile == NULL) {
+    perror("Error opening file");
     return 1;
   }
 
