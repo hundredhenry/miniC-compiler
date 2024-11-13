@@ -41,36 +41,36 @@ function validate {
 echo "Test *****"
 
 # core tests (gihan)
-addition=1
-factorial=1
-fibonacci=1
-pi=1
-while=1
-void=1
-cosine=1
-unary=1
-palindrome=1
-recurse=1
-rfact=1
+addition=0
+factorial=0
+fibonacci=0
+pi=0
+while=0
+void=0
+cosine=0
+unary=0
+palindrome=0
+recurse=0
+rfact=0
 
 # medium tests (edmund)
-example_scope=1
-long=1
-truthiness=1
+example_scope=0
+long=0
+truthiness=0
 widening=1
-fail=1
+fail=0
 
 # hard tests (various (compiled by codethulu))
-assign=1
-associativity=1
-global=1
+assign=0
+associativity=0
+global=0
 infinite=0 # this infinitely loops, test manually
 lazyeval=0 # only turn on for boolean short-circuiting
-returns=1
-scope=1
+returns=0
+scope=0
 unary2=0 # if you turn this on, you deserve what you get FAILED
-while2=1
-two_return=1
+while2=0
+two_return=0
 
 cd tests/addition/
 

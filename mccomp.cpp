@@ -2032,6 +2032,9 @@ Value *BinaryASTNode::codegen() {
   if (Op == PLUS) {
     if (lhs->getType()->isFloatTy() && rhs->getType()->isFloatTy()) {
       return Builder.CreateFAdd(lhs, rhs, "faddtmp");
+    } else if (lhs->getType()->isIntegerTy(1) && rhs->getType()->isIntegerTy(1)) {
+      // Boolean addition is equivalent to boolean OR
+      return Builder.CreateOr(lhs, rhs, "addtmp");
     } else {
       return Builder.CreateAdd(lhs, rhs, "addtmp");
     }
