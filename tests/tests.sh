@@ -65,10 +65,10 @@ assign=1
 associativity=1
 global=1
 infinite=0 # this infinitely loops, test manually
-lazyeval=1 # only turn on for boolean short-circuiting
+lazyeval=0 # only turn on for boolean short-circuiting
 returns=1
 scope=1
-unary2=1 # if you turn this on, you deserve what you get
+unary2=0 # if you turn this on, you deserve what you get FAILED
 while2=1
 two_return=1
 

@@ -57,16 +57,16 @@ bool widening_casts() {
   assign_bf = true;
   assign_bi = true;
 
-  bin_1i = f4 + f1;
-  bin_2i = f4 + i1;
-  bin_3i = f4 + bt;
-  bin_31i = f4 + bf;
-  bin_4i = i3 + f1;
-  bin_5i = i3 + i1;
-  bin_6i = i3 + bt;
-  bin_7i = bt + f1;
-  bin_8i = bt + i1;
-  bin_9i = bt - bt;
+  bin_1i = f4 + f1; // 5.0
+  bin_2i = f4 + i1; // 5.0
+  bin_3i = f4 + bt; // 5.0
+  bin_31i = f4 + bf; // 4.0
+  bin_4i = i3 + f1; // 4.0
+  bin_5i = i3 + i1; // 4
+  bin_6i = i3 + bt; // 4
+  bin_7i = bt + f1; // 2.0
+  bin_8i = bt + i1; // 2
+  bin_9i = bt - bt; // false
 
   print_float(bin_1);
   print_float(bin_2);
