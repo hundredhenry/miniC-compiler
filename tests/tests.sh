@@ -18,11 +18,7 @@ module load GCC/13.3.0
 DIR="$(pwd)"
 
 ### Build mccomp compiler
-echo "Cleanup *****"
-rm -rf ./mccomp
-
 echo "Compile *****"
-
 make clean
 make -j mccomp
 
@@ -41,24 +37,24 @@ function validate {
 echo "Test *****"
 
 # core tests (gihan)
-addition=0
-factorial=0
-fibonacci=0
-pi=0
-while=0
-void=0
-cosine=0
-unary=0
-palindrome=0
-recurse=0
-rfact=0
+addition=1
+factorial=1
+fibonacci=1
+pi=1
+while=1
+void=1
+cosine=1
+unary=1
+palindrome=1
+recurse=1
+rfact=1
 
 # medium tests (edmund)
-example_scope=0
-long=0
-truthiness=0
+example_scope=1
+long=1
+truthiness=1
 widening=1
-fail=0
+fail=1
 
 # hard tests (various (compiled by codethulu))
 assign=0

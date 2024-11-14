@@ -491,9 +491,15 @@ static bool match(int tok) {
 }
 
 // Prints an error message and exits the program
-static void error(string error_msg, int lineNo, int columnNo) {
-  fprintf(stderr, "%d:%d:" RED " error:\e[0m %s\n", lineNo, columnNo,
-          error_msg.c_str());
+static void error(string error_msg, int lineNo, int columnNo,
+                  bool semantic = false) {
+  if (semantic) {
+    fprintf(stderr, "%d:%d:" RED " semantic error:\e[0m %s\n", lineNo, columnNo,
+            error_msg.c_str());
+  } else {
+    fprintf(stderr, "%d:%d:" RED " syntax error:\e[0m %s\n", lineNo, columnNo,
+            error_msg.c_str());
+  }
   exit(1);
 }
 
@@ -639,9 +645,12 @@ public:
   virtual string to_string(int indent = 0) const override {
     string s = indentStr(indent) + "<" GRN "CallASTNode\e[0m, " RED + FuncName +
                "\e[0m>\n";
-    s += indentStr(indent) + BLU + "[Arguments]\e[0m\n";
-    for (const unique_ptr<ASTNode> &arg : Args) {
-      s += arg->to_string(indent + 1);
+    
+    if (!Args.empty()) {
+      s += indentStr(indent) + BLU + "[Arguments]\e[0m\n";
+      for (const unique_ptr<ASTNode> &arg : Args) {
+        s += arg->to_string(indent + 1);
+      }
     }
 
     return s;
@@ -660,6 +669,7 @@ public:
   virtual Value *codegen() override;
   virtual string to_string(int indent = 0) const override {
     string s = indentStr(indent) + "<" GRN "BlockASTNode\e[0m>\n";
+
     for (const unique_ptr<VarASTNode> &decl : LocalDecls) {
       s += decl->to_string(indent + 1);
     }
@@ -685,10 +695,13 @@ public:
   virtual Value *codegen() override;
   virtual string to_string(int indent = 0) const override {
     string s = indentStr(indent) + "<" GRN "IfASTNode\e[0m>\n";
+
     s += indentStr(indent) + BLU + "[Condition]\e[0m\n";
     s += Cond->to_string(indent + 1);
+
     s += indentStr(indent) + BLU + "[Then]\e[0m\n";
     s += Then->to_string(indent + 1);
+
     if (Else) {
       s += indentStr(indent) + BLU + "[Else]\e[0m\n";
       s += Else->to_string(indent + 1);
@@ -710,8 +723,10 @@ public:
   virtual Value *codegen() override;
   virtual string to_string(int indent = 0) const override {
     string s = indentStr(indent) + "<" GRN "WhileASTNode\e[0m>\n";
+
     s += indentStr(indent) + BLU + "[Condition]\e[0m\n";
     s += Cond->to_string(indent + 1);
+
     s += indentStr(indent) + BLU + "[Statement]\e[0m\n";
     s += Stmt->to_string(indent + 1);
 
@@ -730,6 +745,7 @@ public:
   virtual Value *codegen() override;
   virtual string to_string(int indent = 0) const override {
     string s = indentStr(indent) + "<" GRN "ReturnASTNode\e[0m>\n";
+
     if (Expr) {
       s += Expr->to_string(indent + 1);
     }
@@ -757,6 +773,7 @@ public:
   virtual string to_string(int indent = 0) const override {
     string s = indentStr(indent) + "<" GRN "PrototypeASTNode\e[0m, " RED +
                FuncName + "\e[0m: " + RED + getTokStr(FuncType) + "\e[0m>\n";
+
     for (const unique_ptr<VarASTNode> &arg : Params) {
       s += arg->to_string(indent + 1);
     }
@@ -796,15 +813,19 @@ public:
   virtual Value *codegen() override;
   virtual string to_string(int indent = 0) const override {
     string s = indentStr(indent) + "<" GRN "ProgramASTNode\e[0m>\n";
+
     if (!Externs.empty()) {
       s += indentStr(indent) + BLU + "[Externs]\e[0m\n";
       for (const unique_ptr<PrototypeASTNode> &ext : Externs) {
         s += ext->to_string(indent + 1);
       }
     }
-    s += indentStr(indent) + BLU "[Declarations]\e[0m\n";
-    for (auto &decl : Decls) {
-      s += decl->to_string(indent + 1);
+
+    if (!Decls.empty()) {
+      s += indentStr(indent) + BLU + "[Declarations]\e[0m\n";
+      for (const unique_ptr<ASTNode> &decl : Decls) {
+        s += decl->to_string(indent + 1);
+      }
     }
 
     return s;
@@ -986,10 +1007,11 @@ vector<unique_ptr<ASTNode>> p_arg_listP(vector<unique_ptr<ASTNode>> &arg_list) {
     if (contains(follow_arg_listP, CurTok.type)) {
       return std::move(arg_list);
     } else {
-      error("Expected ',' but found " + CurTok.lexeme, CurTok.lineNo,
+      error("Expected ',' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
             CurTok.columnNo);
     }
   }
+  
   unique_ptr<ASTNode> expr = p_expr();
   arg_list.push_back(std::move(expr));
 
@@ -1011,7 +1033,7 @@ vector<unique_ptr<ASTNode>> p_args() {
     if (contains(follow_args, CurTok.type)) {
       return {}; // No arguments
     } else {
-      error("Found invalid token " + CurTok.lexeme, CurTok.lineNo,
+      error("Found invalid token '" + CurTok.lexeme + "'", CurTok.lineNo,
             CurTok.columnNo);
     }
   }
@@ -1030,7 +1052,7 @@ unique_ptr<ASTNode> p_literal() {
   } else if (match(BOOL_LIT)) {
     return make_unique<BoolASTNode>(literal, BoolVal);
   } else {
-    error("Expected literal but found " + CurTok.lexeme, CurTok.lineNo,
+    error("Expected literal but found ''" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
     return nullptr;
   }
@@ -1042,13 +1064,14 @@ unique_ptr<ASTNode> p_referenceP(TOKEN &tok) {
     if (contains(follow_referenceP, CurTok.type)) {
       return make_unique<VarReferenceASTNode>(tok);
     } else {
-      error("Expected '(' but found " + CurTok.lexeme, CurTok.lineNo,
+      error("Expected '(' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
             CurTok.columnNo);
     }
   }
+
   vector<unique_ptr<ASTNode>> args = p_args();
   if (!match(RPAR)) {
-    error("Expected ')' but found " + CurTok.lexeme, CurTok.lineNo,
+    error("Expected ')' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
   }
 
@@ -1058,12 +1081,13 @@ unique_ptr<ASTNode> p_referenceP(TOKEN &tok) {
 // reference -> IDENT reference' | literal
 unique_ptr<ASTNode> p_reference() {
   TOKEN temp = CurTok;
+
   if (!match(IDENT)) {
     if (contains(first_literal, CurTok.type)) {
       return p_literal();
     } else {
-      error("Expected identifier but found " + CurTok.lexeme, CurTok.lineNo,
-            CurTok.columnNo);
+      error("Expected identifier but found '" + CurTok.lexeme + "'",
+            CurTok.lineNo, CurTok.columnNo);
     }
   }
 
@@ -1076,13 +1100,14 @@ unique_ptr<ASTNode> p_factor() {
     if (contains(first_reference, CurTok.type)) {
       return p_reference();
     } else {
-      error("Expected '(' but found " + CurTok.lexeme, CurTok.lineNo,
+      error("Expected '(' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
             CurTok.columnNo);
     }
   }
+
   unique_ptr<ASTNode> expr = p_expr();
   if (!match(RPAR)) {
-    error("Expected ')' but found " + CurTok.lexeme, CurTok.lineNo,
+    error("Expected ')' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
   }
 
@@ -1092,12 +1117,13 @@ unique_ptr<ASTNode> p_factor() {
 // unary -> "-" unary | "!" unary | factor
 unique_ptr<ASTNode> p_unary() {
   TOKEN unaryOp = CurTok;
+
   if (!match(MINUS) && !match(NOT)) {
     if (contains(first_factor, CurTok.type)) {
       return p_factor();
     } else {
-      error("Expected '-' or '!' but found " + CurTok.lexeme, CurTok.lineNo,
-            CurTok.columnNo);
+      error("Expected '-' or '!' but found '" + CurTok.lexeme + "'",
+            CurTok.lineNo, CurTok.columnNo);
     }
   }
 
@@ -1108,14 +1134,16 @@ unique_ptr<ASTNode> p_unary() {
 // "%" unary multiplicative' | ϵ
 unique_ptr<ASTNode> p_multiplicativeP(unique_ptr<ASTNode> lhs) {
   TOKEN multiplicativeOp = CurTok;
+
   if (!match(ASTERIX) && !match(DIV) && !match(MOD)) {
     if (contains(follow_multiplicativeP, CurTok.type)) {
       return lhs;
     } else {
-      error("Expected '*', '/', or '%' but found " + CurTok.lexeme,
+      error("Expected '*', '/', or '%' but found '" + CurTok.lexeme + "'",
             CurTok.lineNo, CurTok.columnNo);
     }
   }
+
   unique_ptr<BinaryASTNode> multiplicativeExpr =
       make_unique<BinaryASTNode>(multiplicativeOp, std::move(lhs), p_unary());
 
@@ -1132,14 +1160,16 @@ unique_ptr<ASTNode> p_multiplicative() {
 // additive' -> "+" multiplicative additive' | "-" multiplicative additive' | ϵ
 unique_ptr<ASTNode> p_additiveP(unique_ptr<ASTNode> lhs) {
   TOKEN additiveOp = CurTok;
+
   if (!match(PLUS) && !match(MINUS)) {
     if (contains(follow_additiveP, CurTok.type)) {
       return lhs;
     } else {
-      error("Expected '+' or '-' but found " + CurTok.lexeme, CurTok.lineNo,
-            CurTok.columnNo);
+      error("Expected '+' or '-' but found '" + CurTok.lexeme + "'",
+            CurTok.lineNo, CurTok.columnNo);
     }
   }
+
   unique_ptr<BinaryASTNode> additiveExpr = make_unique<BinaryASTNode>(
       additiveOp, std::move(lhs), p_multiplicative());
 
@@ -1157,14 +1187,16 @@ unique_ptr<ASTNode> p_additive() {
 // additive relational' | ">" additive relational' | ϵ
 unique_ptr<ASTNode> p_relationalP(unique_ptr<ASTNode> lhs) {
   TOKEN relationalOp = CurTok;
+
   if (!match(LE) && !match(LT) && !match(GE) && !match(GT)) {
     if (contains(follow_relationalP, CurTok.type)) {
       return lhs;
     } else {
-      error("Expected '<=', '<', '>=' or '>' but found " + CurTok.lexeme,
+      error("Expected '<=', '<', '>=' or '>' but found '" + CurTok.lexeme + "'",
             CurTok.lineNo, CurTok.columnNo);
     }
   }
+
   unique_ptr<BinaryASTNode> relationalExpr =
       make_unique<BinaryASTNode>(relationalOp, std::move(lhs), p_additive());
 
@@ -1181,14 +1213,16 @@ unique_ptr<ASTNode> p_relational() {
 // equality' -> "==" relational equality' | "!=" relational equality' | ϵ
 unique_ptr<ASTNode> p_equalityP(unique_ptr<ASTNode> lhs) {
   TOKEN equalityOp = CurTok;
+
   if (!match(EQ) && !match(NE)) {
     if (contains(follow_equalityP, CurTok.type)) {
       return lhs;
     } else {
-      error("Expected '==' or '!=' but found " + CurTok.lexeme, CurTok.lineNo,
-            CurTok.columnNo);
+      error("Expected '==' or '!=' but found '" + CurTok.lexeme + "'",
+            CurTok.lineNo, CurTok.columnNo);
     }
   }
+
   unique_ptr<BinaryASTNode> equalityExpr =
       make_unique<BinaryASTNode>(equalityOp, std::move(lhs), p_relational());
 
@@ -1205,16 +1239,19 @@ unique_ptr<ASTNode> p_equality() {
 // logical_and' -> "&&" equality logical_and' | ϵ
 unique_ptr<ASTNode> p_logical_andP(unique_ptr<ASTNode> lhs) {
   TOKEN logicalAndOp = CurTok;
+
   if (!match(AND)) {
     if (contains(follow_logical_andP, CurTok.type)) {
       return lhs;
     } else {
-      error("Expected '&&' but found " + CurTok.lexeme, CurTok.lineNo,
+      error("Expected '&&' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
             CurTok.columnNo);
     }
   }
+
   unique_ptr<BinaryASTNode> logicalAndExpr =
       make_unique<BinaryASTNode>(logicalAndOp, std::move(lhs), p_equality());
+
   return p_logical_andP(std::move(logicalAndExpr));
 }
 
@@ -1228,14 +1265,16 @@ unique_ptr<ASTNode> p_logical_and() {
 // logical_or' -> "||" logical_and logical_or' | ϵ
 unique_ptr<ASTNode> p_logical_orP(unique_ptr<ASTNode> lhs) {
   TOKEN logicalOrOp = CurTok;
+
   if (!match(OR)) {
     if (contains(follow_logical_orP, CurTok.type)) {
       return lhs;
     } else {
-      error("Expected '||' but found " + CurTok.lexeme, CurTok.lineNo,
+      error("Expected '||' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
             CurTok.columnNo);
     }
   }
+
   unique_ptr<BinaryASTNode> logicalOrExpr =
       make_unique<BinaryASTNode>(logicalOrOp, std::move(lhs), p_logical_and());
 
@@ -1253,16 +1292,18 @@ unique_ptr<ASTNode> p_logical_or() {
 unique_ptr<ASTNode> p_expr() {
   TOKEN temp = CurTok;
   TOKEN assignOp = getNextToken();
+
   if (!(temp.type == IDENT) || !match(ASSIGN)) {
     if (contains(first_logical_or, temp.type)) {
       putBackToken(CurTok);
       CurTok = temp;
       return p_logical_or();
     } else {
-      error("Found invalid token " + CurTok.lexeme, CurTok.lineNo,
+      error("Found invalid token '" + CurTok.lexeme + "'", CurTok.lineNo,
             CurTok.columnNo);
     }
   }
+
   unique_ptr<VarReferenceASTNode> var = make_unique<VarReferenceASTNode>(temp);
   unique_ptr<ASTNode> expr = p_expr();
 
@@ -1272,10 +1313,12 @@ unique_ptr<ASTNode> p_expr() {
 // return_stmt -> "return" expr_stmt
 unique_ptr<ASTNode> p_return_stmt() {
   TOKEN returnTok = CurTok;
+
   if (!match(RETURN)) {
-    error("Expected 'return' but found " + CurTok.lexeme, CurTok.lineNo,
+    error("Expected 'return' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
   }
+
   unique_ptr<ASTNode> exprStmt = p_expr_stmt();
 
   return make_unique<ReturnASTNode>(returnTok, std::move(exprStmt));
@@ -1284,14 +1327,16 @@ unique_ptr<ASTNode> p_return_stmt() {
 // else_stmt -> "else" block | ϵ
 unique_ptr<BlockASTNode> p_else_stmt() {
   TOKEN elseTok = CurTok;
+
   if (!match(ELSE)) {
     if (contains(follow_else_stmt, CurTok.type)) {
       return nullptr;
     } else {
-      error("Expected 'else' but found " + CurTok.lexeme, CurTok.lineNo,
+      error("Expected 'else' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
             CurTok.columnNo);
     }
   }
+
   unique_ptr<BlockASTNode> block = p_block();
 
   return block;
@@ -1300,19 +1345,22 @@ unique_ptr<BlockASTNode> p_else_stmt() {
 // if_stmt -> "if" "(" expr ")" block else_stmt
 unique_ptr<ASTNode> p_if_stmt() {
   TOKEN ifTok = CurTok;
+
   if (!match(IF)) {
-    error("Expected 'if' but found " + CurTok.lexeme, CurTok.lineNo,
+    error("Expected 'if' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
   }
   if (!match(LPAR)) {
-    error("Expected '(' but found " + CurTok.lexeme, CurTok.lineNo,
+    error("Expected '(' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
   }
+
   unique_ptr<ASTNode> cond = p_expr();
   if (!match(RPAR)) {
-    error("Expected ')' but found " + CurTok.lexeme, CurTok.lineNo,
+    error("Expected ')' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
   }
+
   unique_ptr<BlockASTNode> thenBlock = p_block();
   unique_ptr<BlockASTNode> elseStmt = p_else_stmt();
 
@@ -1323,19 +1371,22 @@ unique_ptr<ASTNode> p_if_stmt() {
 // while_stmt -> "while" "(" expr ")" stmt
 unique_ptr<ASTNode> p_while_stmt() {
   TOKEN whileTok = CurTok;
+
   if (!match(WHILE)) {
-    error("Expected 'while' but found " + CurTok.lexeme, CurTok.lineNo,
+    error("Expected 'while' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
   }
   if (!match(LPAR)) {
-    error("Expected '(' but found " + CurTok.lexeme, CurTok.lineNo,
+    error("Expected '(' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
   }
+
   unique_ptr<ASTNode> expr = p_expr();
   if (!match(RPAR)) {
-    error("Expected ')' but found " + CurTok.lexeme, CurTok.lineNo,
+    error("Expected ')' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
   }
+
   unique_ptr<ASTNode> stmt = p_stmt();
 
   return make_unique<WhileASTNode>(whileTok, std::move(expr), std::move(stmt));
@@ -1347,13 +1398,14 @@ unique_ptr<ASTNode> p_expr_stmt() {
     if (match(SC)) {
       return nullptr;
     } else {
-      error("Found invalid token " + CurTok.lexeme, CurTok.lineNo,
+      error("Found invalid token '" + CurTok.lexeme + "'", CurTok.lineNo,
             CurTok.columnNo);
     }
   }
+
   unique_ptr<ASTNode> expr = p_expr();
   if (!match(SC)) {
-    error("Expected ';' but found " + CurTok.lexeme, CurTok.lineNo,
+    error("Expected ';' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
   }
 
@@ -1373,22 +1425,22 @@ unique_ptr<ASTNode> p_stmt() {
   } else if (contains(first_return_stmt, CurTok.type)) {
     return p_return_stmt();
   } else {
-    error("Found invalid token " + CurTok.lexeme, CurTok.lineNo,
+    error("Found invalid token '" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
   }
 }
 
 // stmt_list' -> stmt stmt_list' | ϵ
-vector<unique_ptr<ASTNode>>
-p_stmt_listP(vector<unique_ptr<ASTNode>> &stmt_list) {
+vector<unique_ptr<ASTNode>> p_stmt_listP(vector<unique_ptr<ASTNode>> &stmt_list) {
   if (!contains(first_stmt, CurTok.type)) {
     if (contains(follow_stmt_listP, CurTok.type)) {
       return std::move(stmt_list);
     } else {
-      error("Found invalid token " + CurTok.lexeme, CurTok.lineNo,
+      error("Found invalid token '" + CurTok.lexeme + "'", CurTok.lineNo,
             CurTok.columnNo);
     }
   }
+
   unique_ptr<ASTNode> stmt = p_stmt();
   stmt_list.push_back(std::move(stmt));
 
@@ -1408,12 +1460,13 @@ vector<unique_ptr<ASTNode>> p_stmt_list() {
 unique_ptr<VarASTNode> p_local_decl() {
   TOKEN_TYPE varType = p_var_type();
   TOKEN varName = CurTok;
+
   if (!match(IDENT)) {
-    error("Expected identifier but found " + CurTok.lexeme, CurTok.lineNo,
-          CurTok.columnNo);
+    error("Expected identifier but found '" + CurTok.lexeme + "'",
+          CurTok.lineNo, CurTok.columnNo);
   }
   if (!match(SC)) {
-    error("Expected ';' but found " + CurTok.lexeme, CurTok.lineNo,
+    error("Expected ';' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
   }
 
@@ -1421,16 +1474,16 @@ unique_ptr<VarASTNode> p_local_decl() {
 }
 
 // local_decls' -> local_decl local_decls' | ϵ
-vector<unique_ptr<VarASTNode>>
-p_local_declsP(vector<unique_ptr<VarASTNode>> &local_decls) {
+vector<unique_ptr<VarASTNode>> p_local_declsP(vector<unique_ptr<VarASTNode>> &local_decls) {
   if (!contains(first_local_decl, CurTok.type)) {
     if (contains(follow_local_declsP, CurTok.type)) {
       return std::move(local_decls);
     } else {
-      error("Found invalid token " + CurTok.lexeme, CurTok.lineNo,
+      error("Found invalid token '" + CurTok.lexeme + "'", CurTok.lineNo,
             CurTok.columnNo);
     }
   }
+
   unique_ptr<VarASTNode> localDecl = p_local_decl();
   local_decls.push_back(std::move(localDecl));
 
@@ -1447,13 +1500,15 @@ vector<unique_ptr<VarASTNode>> p_local_decls() {
 // block -> "{" local_decls stmt_list "}"
 unique_ptr<BlockASTNode> p_block() {
   if (!match(LBRA)) {
-    error("Expected '{' but found " + CurTok.lexeme, CurTok.lineNo,
+    error("Expected '{' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
   }
+
   vector<unique_ptr<VarASTNode>> localDecls = p_local_decls();
   vector<unique_ptr<ASTNode>> stmtList = p_stmt_list();
+
   if (!match(RBRA)) {
-    error("Expected '}' but found " + CurTok.lexeme, CurTok.lineNo,
+    error("Expected '}' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
   }
 
@@ -1464,25 +1519,26 @@ unique_ptr<BlockASTNode> p_block() {
 unique_ptr<VarASTNode> p_param() {
   TOKEN_TYPE varType = p_var_type();
   TOKEN varName = CurTok;
+
   if (!match(IDENT)) {
-    error("Expected identifier but found " + CurTok.lexeme, CurTok.lineNo,
-          CurTok.columnNo);
+    error("Expected identifier but found '" + CurTok.lexeme + "'",
+          CurTok.lineNo, CurTok.columnNo);
   }
 
   return make_unique<VarASTNode>(varName, varType);
 }
 
 // param_list' -> "," param param_list' | ϵ
-vector<unique_ptr<VarASTNode>>
-p_param_listP(vector<unique_ptr<VarASTNode>> &param_list) {
+vector<unique_ptr<VarASTNode>> p_param_listP(vector<unique_ptr<VarASTNode>> &param_list) {
   if (!match(COMMA)) {
     if (contains(follow_param_listP, CurTok.type)) {
       return std::move(param_list);
     } else {
-      error("Found invalid token " + CurTok.lexeme, CurTok.lineNo,
+      error("Found invalid token '" + CurTok.lexeme + "'", CurTok.lineNo,
             CurTok.columnNo);
     }
   }
+
   unique_ptr<VarASTNode> param = p_param();
   param_list.push_back(std::move(param));
 
@@ -1504,7 +1560,7 @@ vector<unique_ptr<VarASTNode>> p_params() {
     if (contains(follow_params, CurTok.type)) {
       return {}; // Void, no parameters
     } else {
-      error("Found invalid token " + CurTok.lexeme, CurTok.lineNo,
+      error("Found invalid token '" + CurTok.lexeme + "'", CurTok.lineNo,
             CurTok.columnNo);
     }
   }
@@ -1524,7 +1580,8 @@ TOKEN_TYPE p_var_type() {
   } else if (match(BOOL_TOK)) {
     return BOOL_TOK;
   } else {
-    error("Expected 'int', 'float', or 'bool' but found " + CurTok.lexeme,
+    error("Expected 'int', 'float', or 'bool' but found '" + CurTok.lexeme +
+              "'",
           CurTok.lineNo, CurTok.columnNo);
   }
 }
@@ -1536,8 +1593,8 @@ TOKEN_TYPE p_type_spec() {
   } else if (match(VOID_TOK)) {
     return VOID_TOK;
   } else {
-    error("Expected 'int', 'float', 'bool', or 'void' but found " +
-              CurTok.lexeme,
+    error("Expected 'int', 'float', 'bool', or 'void' but found '" +
+              CurTok.lexeme + "'",
           CurTok.lineNo, CurTok.columnNo);
   }
 }
@@ -1546,14 +1603,16 @@ TOKEN_TYPE p_type_spec() {
 unique_ptr<ASTNode> p_decl() {
   if (!contains(first_var_type, CurTok.type) &&
       !contains(first_type_spec, CurTok.type)) {
-    error("Found invalid token " + CurTok.lexeme, CurTok.lineNo,
+    error("Found invalid token '" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
   }
+
   TOKEN_TYPE declType = p_type_spec();
   TOKEN declName = CurTok;
+
   if (!match(IDENT)) {
-    error("Expected identifier but found " + CurTok.lexeme, CurTok.lineNo,
-          CurTok.columnNo);
+    error("Expected identifier but found '" + CurTok.lexeme + "'",
+          CurTok.lineNo, CurTok.columnNo);
   }
   if (match(SC)) {
     if (declType == VOID_TOK) {
@@ -1562,15 +1621,17 @@ unique_ptr<ASTNode> p_decl() {
     }
     return make_unique<VarASTNode>(declName, declType, true);
   }
+
   if (!match(LPAR)) {
-    error("Expected '(' but found " + CurTok.lexeme, CurTok.lineNo,
+    error("Expected '(' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
   }
   vector<unique_ptr<VarASTNode>> params = p_params();
   if (!match(RPAR)) {
-    error("Expected ')' but found " + CurTok.lexeme, CurTok.lineNo,
+    error("Expected ')' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
   }
+
   unique_ptr<PrototypeASTNode> proto =
       make_unique<PrototypeASTNode>(declName, declType, std::move(params));
   unique_ptr<BlockASTNode> block = p_block();
@@ -1585,7 +1646,7 @@ p_decl_listP(vector<unique_ptr<ASTNode>> &decl_list) {
     if (contains(follow_decl_listP, CurTok.type)) {
       return std::move(decl_list);
     } else {
-      error("Found invalid token " + CurTok.lexeme, CurTok.lineNo,
+      error("Found invalid token '" + CurTok.lexeme + "'", CurTok.lineNo,
             CurTok.columnNo);
     }
   }
@@ -1607,26 +1668,30 @@ vector<unique_ptr<ASTNode>> p_decl_list() {
 // extern -> "extern" type_spec IDENT "(" params ")" ";"
 unique_ptr<PrototypeASTNode> p_extern() {
   if (!match(EXTERN)) {
-    error("Expected 'extern' but found " + CurTok.lexeme, CurTok.lineNo,
+    error("Expected 'extern' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
   }
+  
   TOKEN_TYPE externType = p_type_spec();
   TOKEN externName = CurTok;
+
   if (!match(IDENT)) {
-    error("Expected identifier but found " + CurTok.lexeme, CurTok.lineNo,
-          CurTok.columnNo);
+    error("Expected identifier but found '" + CurTok.lexeme + "'",
+          CurTok.lineNo, CurTok.columnNo);
   }
+
   if (!match(LPAR)) {
-    error("Expected '(' but found " + CurTok.lexeme, CurTok.lineNo,
+    error("Expected '(' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
   }
   vector<unique_ptr<VarASTNode>> params = p_params();
   if (!match(RPAR)) {
-    error("Expected ')' but found " + CurTok.lexeme, CurTok.lineNo,
+    error("Expected ')' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
   }
+
   if (!match(SC)) {
-    error("Expected ';' but found " + CurTok.lexeme, CurTok.lineNo,
+    error("Expected ';' but found '" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
   }
 
@@ -1641,10 +1706,11 @@ p_extern_listP(vector<unique_ptr<PrototypeASTNode>> &extern_list) {
     if (contains(follow_extern_listP, CurTok.type)) {
       return std::move(extern_list);
     } else {
-      error("Found invalid token " + CurTok.lexeme, CurTok.lineNo,
+      error("Found invalid token '" + CurTok.lexeme + "'", CurTok.lineNo,
             CurTok.columnNo);
     }
   }
+
   unique_ptr<PrototypeASTNode> externDecl = p_extern();
   extern_list.push_back(std::move(externDecl));
 
@@ -1663,15 +1729,13 @@ unique_ptr<ProgramASTNode> p_program() {
   if (contains(first_extern_list, CurTok.type)) {
     vector<unique_ptr<PrototypeASTNode>> externs = p_extern_list();
     vector<unique_ptr<ASTNode>> decls = p_decl_list();
-
     return make_unique<ProgramASTNode>(std::move(externs), std::move(decls));
   } else if (contains(first_decl_list, CurTok.type)) {
     vector<unique_ptr<PrototypeASTNode>> externs;
     vector<unique_ptr<ASTNode>> decls = p_decl_list();
-
     return make_unique<ProgramASTNode>(std::move(externs), std::move(decls));
   } else {
-    error("Found invalid token " + CurTok.lexeme, CurTok.lineNo,
+    error("Found invalid token '" + CurTok.lexeme + "'", CurTok.lineNo,
           CurTok.columnNo);
   }
 }
@@ -1784,16 +1848,15 @@ static Value *cast(Value *val, Type *type) {
     return castToFloat(val); // Can cast boolean or int to float
   } else if (type->isIntegerTy(32)) {
     if (val->getType()->isFloatTy()) {
-      printf("Cannot narrow float to int\n");
       return nullptr; // Error, cannot narrow float to int
     }
     return castToInt(val); // Can cast boolean to int
   } else {
-    printf("Narrowing int or float to bool\n");
     return nullptr; // Error, cannot narrow int or float to bool
   }
 }
 
+// Determines the highest priority type to widen to for binary operations
 static Type *priorityType(Type *lhs, Type *rhs) {
   if (lhs->isFloatTy() || rhs->isFloatTy()) {
     return Type::getFloatTy(TheContext);
@@ -1821,9 +1884,10 @@ Value *VarASTNode::codegen() {
 
   if (global) {
     if (GlobalNamedValues.find(VarName) != GlobalNamedValues.end()) {
-      error("Global variable " + VarName + " has an existing definition", Tok.lineNo,
-            Tok.columnNo);
+      error("Global variable '" + VarName + "' has an existing definition",
+            Tok.lineNo, Tok.columnNo, true);
     }
+
     TheModule->getOrInsertGlobal(VarName, type);
     GlobalVariable *globalVar = TheModule->getNamedGlobal(VarName);
     globalVar->setInitializer(Constant::getNullValue(type));
@@ -1834,8 +1898,8 @@ Value *VarASTNode::codegen() {
     return globalVar;
   } else {
     if (NamedValues.back().find(VarName) != NamedValues.back().end()) {
-      error("Local variable " + VarName + " has an existing definition", Tok.lineNo,
-            Tok.columnNo);
+      error("Local variable '" + VarName + "' has an existing definition",
+            Tok.lineNo, Tok.columnNo, true);
     }
 
     AllocaInst *alloca = CreateEntryBlockAlloca(
@@ -1852,15 +1916,18 @@ Value *VarReferenceASTNode::codegen() {
   } else if (GlobalNamedValues.find(VarName) != GlobalNamedValues.end()) {
     return GlobalNamedValues[VarName];
   } else {
-    error("Undefined variable " + VarName + " referenced", Tok.lineNo, Tok.columnNo);
+    error("Undefined variable '" + VarName + "' referenced", Tok.lineNo,
+          Tok.columnNo, true);
   }
 }
 
 Function *PrototypeASTNode::codegen() {
+  // Get types of all arguments and store in argTypes
   vector<Type *> argTypes(Params.size());
   for (unsigned i = 0; i < Params.size(); i++) {
     argTypes[i] = getLLVMType(Params[i]->getVarType());
   }
+
   FunctionType *funcType =
       FunctionType::get(getLLVMType(FuncType), argTypes, false);
   Function *func = Function::Create(funcType, Function::ExternalLinkage,
@@ -1878,12 +1945,14 @@ Function *PrototypeASTNode::codegen() {
 Function *FunctionASTNode::codegen() {
   Function *TheFunction = TheModule->getFunction(Proto->getProtoName());
 
+  // Generate function prototype if it does not exist
   if (!TheFunction) {
     TheFunction = Proto->codegen();
   } else {
-    error("Function " + Proto->getProtoName() + " has an existing definition", Proto->getProtoTok().lineNo,
-          Proto->getProtoTok().columnNo);
+    error("Function '" + Proto->getProtoName() + "' has an existing definition",
+          Proto->getProtoTok().lineNo, Proto->getProtoTok().columnNo, true);
   }
+  // Create a new basic block to start insertion into
   BasicBlock *BB = BasicBlock::Create(TheContext, "func", TheFunction);
   Builder.SetInsertPoint(BB);
 
@@ -1901,6 +1970,7 @@ Function *FunctionASTNode::codegen() {
 
   // Generate function body
   Value *retVal = Body->codegen();
+  // Check function blocks for missing return statements or add return void if the function is void
   for (BasicBlock &BB : *TheFunction) {
     if (BB.getTerminator() != nullptr) {
       continue;
@@ -1909,14 +1979,17 @@ Function *FunctionASTNode::codegen() {
       Builder.SetInsertPoint(&BB);
       Builder.CreateRetVoid();
     } else {
-      TheModule->print(errs(), nullptr);
-      error("Missing return statement in non-void function " + Proto->getProtoName(),
-            Proto->getProtoTok().lineNo, Proto->getProtoTok().columnNo);
+      error("Missing return statement in non-void function '" +
+                Proto->getProtoName() + "'",
+            Proto->getProtoTok().lineNo, Proto->getProtoTok().columnNo, true);
     }
   }
+
+  // Validate the generated function
   if (verifyFunction(*TheFunction, &errs())) {
-    error("Function verification failed", Proto->getProtoTok().lineNo,
-          Proto->getProtoTok().columnNo);
+    error("Function verification failed for function '" +
+              Proto->getProtoName() + "'",
+          Proto->getProtoTok().lineNo, Proto->getProtoTok().columnNo, true);
   }
 
   return TheFunction;
@@ -1924,28 +1997,36 @@ Function *FunctionASTNode::codegen() {
 
 Value *CallASTNode::codegen() {
   Function *calleeFunc = TheModule->getFunction(FuncName);
+
   if (!calleeFunc) {
-    error("Call to undefined function " + FuncName, Tok.lineNo, Tok.columnNo);
+    error("Call to undefined function '" + FuncName + "'", Tok.lineNo,
+          Tok.columnNo, true);
   }
   if (calleeFunc->arg_size() != Args.size()) {
-    error("Incorrect number of arguments passed to function " + FuncName,
-          Tok.lineNo, Tok.columnNo);
-  }
-  vector<Value *> argsV;
-  for (unique_ptr<ASTNode> &arg : Args) {
-    Value *argV = arg->codegen();
-    argV = loadIfVar(argV);
-    if (argV->getType() != calleeFunc->arg_begin()->getType()) {
-      argV = cast(argV, calleeFunc->arg_begin()->getType());
-      if (!argV) {
-        error("Incorrect argument type passed to function " + FuncName,
-              Tok.lineNo, Tok.columnNo);
-      }
-    }
-    argsV.push_back(argV);
+    error("Incorrect number of arguments passed to function '" + FuncName + "'",
+          Tok.lineNo, Tok.columnNo, true);
   }
 
-  return Builder.CreateCall(calleeFunc, argsV, "calltmp");
+  // Generate code for all arguments and store in argsV
+  vector<Value *> argsVals;
+  for (unique_ptr<ASTNode> &arg : Args) {
+    Value *argVal = arg->codegen();
+    argVal = loadIfVar(argVal);
+
+    if (argVal->getType() != calleeFunc->arg_begin()->getType()) {
+      argVal = cast(argVal, calleeFunc->arg_begin()->getType());
+
+      if (!argVal) {
+        error("Cannot narrow argument of invalid type passed to function '" +
+                  FuncName + "'",
+              Tok.lineNo, Tok.columnNo, true);
+      }
+    }
+
+    argsVals.push_back(argVal);
+  }
+
+  return Builder.CreateCall(calleeFunc, argsVals, "calltmp");
 }
 
 Value *UnaryASTNode::codegen() {
@@ -1969,6 +2050,7 @@ Value *BinaryASTNode::codegen() {
   Value *lhs = LHS->codegen();
   Value *rhs = RHS->codegen();
 
+  // Load variables if we can, but no need to load LHS if we are assigning to it
   if (Op != ASSIGN) {
     lhs = loadIfVar(lhs);
   }
@@ -1976,64 +2058,53 @@ Value *BinaryASTNode::codegen() {
 
   if (Op == ASSIGN) {
     if (AllocaInst *allocaInst = dyn_cast<AllocaInst>(lhs)) {
-      // Cast right-hand side to the type of the left-hand side
       rhs = cast(rhs, allocaInst->getAllocatedType());
-      Builder.CreateStore(rhs, allocaInst);
-
-      return rhs;
+      if (!rhs) {
+        error("Cannot narrow invalid typed expression to local variable '" +
+                  allocaInst->getName().str() + "'",
+              Tok.lineNo, Tok.columnNo, true);
+      }
+      return Builder.CreateStore(rhs, allocaInst);
     } else if (GlobalVariable *globalVar = dyn_cast<GlobalVariable>(lhs)) {
-      // Cast right-hand side to the type of the left-hand side
       rhs = cast(rhs, globalVar->getValueType());
-      Builder.CreateStore(rhs, globalVar);
-
-      return rhs;
+      if (!rhs) {
+        error("Cannot narrow invalid typed expression to global variable '" +
+                  globalVar->getName().str() + "'",
+              Tok.lineNo, Tok.columnNo, true);
+      }
+      return Builder.CreateStore(rhs, globalVar);
     } else {
-      error("Invalid assignment target", Tok.lineNo, Tok.columnNo);
+      error("Invalid assignment target", Tok.lineNo, Tok.columnNo, true);
     }
   }
 
+  // Handle logical AND and OR, allow narrowing here
   if (Op == AND) {
-    if (lhs->getType()->isIntegerTy(1) && rhs->getType()->isIntegerTy(1)) {
-      return Builder.CreateAnd(lhs, rhs, "andtmp");
-    } else {
-      if (!lhs->getType()->isIntegerTy(1)) {
-        lhs = castToBool(lhs);
-      }
-      if (!rhs->getType()->isIntegerTy(1)) {
-        rhs = castToBool(rhs);
-      }
-
-      return Builder.CreateAnd(lhs, rhs, "andtmp");
-    }
+    lhs = castToBool(lhs);
+    rhs = castToBool(rhs);
+    return Builder.CreateAnd(lhs, rhs, "andtmp");
   } else if (Op == OR) {
-    if (lhs->getType()->isIntegerTy(1) && rhs->getType()->isIntegerTy(1)) {
-      return Builder.CreateOr(lhs, rhs, "ortmp");
-    } else {
-      if (!lhs->getType()->isIntegerTy(1)) {
-        lhs = castToBool(lhs);
-      }
-      if (!rhs->getType()->isIntegerTy(1)) {
-        rhs = castToBool(rhs);
-      }
-
-      return Builder.CreateOr(lhs, rhs, "ortmp");
-    }
+    lhs = castToBool(lhs);
+    rhs = castToBool(rhs);
+    return Builder.CreateOr(lhs, rhs, "ortmp");
   }
 
   // Widen types of left and right hand side if necessary
   Type *exprType = priorityType(lhs->getType(), rhs->getType());
-  if (lhs->getType() != exprType) {
-    lhs = cast(lhs, exprType);
-  }
-  if (rhs->getType() != exprType) {
-    rhs = cast(rhs, exprType);
+  lhs = cast(lhs, exprType);
+  rhs = cast(rhs, exprType);
+
+  if (!lhs || !rhs) {
+    error("Cannot narrow invalid types for binary operation", Tok.lineNo, Tok.columnNo,
+          true);
   }
 
   if (Op == PLUS) {
     if (lhs->getType()->isFloatTy() && rhs->getType()->isFloatTy()) {
       return Builder.CreateFAdd(lhs, rhs, "faddtmp");
-    } else if (lhs->getType()->isIntegerTy(1) && rhs->getType()->isIntegerTy(1)) {
-      // Boolean addition is equivalent to boolean OR
+    } else if (lhs->getType()->isIntegerTy(1) &&
+               rhs->getType()->isIntegerTy(1)) {
+      // Boolean addition is equivalent to boolean OR, true + true = true
       return Builder.CreateOr(lhs, rhs, "addtmp");
     } else {
       return Builder.CreateAdd(lhs, rhs, "addtmp");
@@ -2054,8 +2125,9 @@ Value *BinaryASTNode::codegen() {
     if (rhs == ConstantInt::get(TheContext, APInt(32, 0, true)) ||
         rhs == ConstantInt::get(TheContext, APInt(1, 0, false)) ||
         rhs == ConstantFP::get(TheContext, APFloat(0.0))) {
-      error("Division by zero", Tok.lineNo, Tok.columnNo);
+      error("Cannot divide by zero", Tok.lineNo, Tok.columnNo, true);
     }
+
     if (lhs->getType()->isFloatTy() && rhs->getType()->isFloatTy()) {
       return Builder.CreateFDiv(lhs, rhs, "fdivtmp");
     } else {
@@ -2065,8 +2137,9 @@ Value *BinaryASTNode::codegen() {
     if (rhs == ConstantInt::get(TheContext, APInt(32, 0, true)) ||
         rhs == ConstantInt::get(TheContext, APInt(1, 0, false)) ||
         rhs == ConstantFP::get(TheContext, APFloat(0.0))) {
-      error("Modulo by zero", Tok.lineNo, Tok.columnNo);
+      error("Cannot modulus by zero", Tok.lineNo, Tok.columnNo, true);
     }
+
     if (lhs->getType()->isFloatTy() && rhs->getType()->isFloatTy()) {
       return Builder.CreateFRem(lhs, rhs, "fremtmp");
     } else {
@@ -2115,37 +2188,46 @@ Value *ReturnASTNode::codegen() {
   Function *TheFunction = Builder.GetInsertBlock()->getParent();
   Type *retType = TheFunction->getReturnType();
 
-  if (!retType->isVoidTy()) {
-    if (!Expr) {
-      error("Expected return value for non-void function",
-            Tok.lineNo, Tok.columnNo);
-    }
-    Value *retVal = Expr->codegen();
-    retVal = loadIfVar(retVal);
-    retVal = cast(retVal, retType);
-    if (!retVal) {
-      error("Cannot widen return value to function return type", Tok.lineNo,
-            Tok.columnNo);
-    }
-    return Builder.CreateRet(retVal);
-  } else {
+  // Check if the function is void and error if there is a return value
+  if (retType->isVoidTy()) {
     if (Expr) {
-      error("Unexpected return value for void function", Tok.lineNo,
-            Tok.columnNo);
+      error("Unexpected return value for void function '" +
+                TheFunction->getName().str() + "'",
+            Tok.lineNo, Tok.columnNo, true);
     }
     return Builder.CreateRetVoid();
   }
+
+  // Check if the non-void function has a return value
+  if (!Expr) {
+    error("Expected return value for non-void function '" +
+              TheFunction->getName().str() + "'",
+          Tok.lineNo, Tok.columnNo, true);
+  }
+
+  Value *retVal = Expr->codegen();
+  retVal = loadIfVar(retVal);
+  retVal = cast(retVal, retType);
+
+  if (!retVal) {
+    error("Cannot narrow return value to function return type for function '" +
+              TheFunction->getName().str() + "'",
+          Tok.lineNo, Tok.columnNo, true);
+  }
+  
+  return Builder.CreateRet(retVal);
 }
 
 Value *IfASTNode::codegen() {
   Value *cond = Cond->codegen();
   cond = loadIfVar(cond);
+
   if (!cond->getType()->isIntegerTy(1)) {
     cond = castToBool(cond);
   }
-
   cond = Builder.CreateICmpNE(
       cond, ConstantInt::get(TheContext, APInt(1, 0, true)), "ifcond");
+
   Function *TheFunction = Builder.GetInsertBlock()->getParent();
   BasicBlock *thenBB = BasicBlock::Create(TheContext, "then", TheFunction);
   BasicBlock *elseBB = BasicBlock::Create(TheContext, "else");
@@ -2196,12 +2278,13 @@ Value *WhileASTNode::codegen() {
   Builder.SetInsertPoint(condBB);
   Value *cond = Cond->codegen();
   cond = loadIfVar(cond);
-  // If the condition is not a boolean, cast it to a boolean 
+
+  // If the condition is not a boolean, cast it to a boolean
   if (!cond->getType()->isIntegerTy(1)) {
     cond = castToBool(cond);
   }
   cond = Builder.CreateICmpNE(
-    cond, ConstantInt::get(TheContext, APInt(1, 0, true)), "whilecond");
+      cond, ConstantInt::get(TheContext, APInt(1, 0, true)), "whilecond");
   Builder.CreateCondBr(cond, loopBB, afterBB);
 
   // Emit loop block
@@ -2216,7 +2299,7 @@ Value *WhileASTNode::codegen() {
   // Emit after block
   TheFunction->insert(TheFunction->end(), afterBB);
   Builder.SetInsertPoint(afterBB);
-  
+
   return Constant::getNullValue(Type::getInt32Ty(TheContext));
 }
 
@@ -2229,10 +2312,11 @@ Value *BlockASTNode::codegen() {
   }
   for (unique_ptr<ASTNode> &stmt : StmtList) {
     stmt->codegen();
-    if(Builder.GetInsertBlock()->getTerminator() != nullptr) {
+    if (Builder.GetInsertBlock()->getTerminator() != nullptr) {
       break;
     }
   }
+
   // Clean up scope
   NamedValues.pop_back();
 
@@ -2295,7 +2379,7 @@ int main(int argc, char **argv) {
   // Run the parser now.
   unique_ptr<ProgramASTNode> program = parser();
   fprintf(stderr, "Parsing Finished\n");
-  llvm::outs() << *program << "\n";
+  program->to_string();
   program->codegen();
 
   //********************* Start printing final IR **************************
