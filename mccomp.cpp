@@ -837,31 +837,17 @@ public:
 
 // First sets of each production
 const vector<TOKEN_TYPE> first_extern_list = {EXTERN};
-const vector<TOKEN_TYPE> first_extern_listP = {EXTERN};
 const vector<TOKEN_TYPE> first_extern = {EXTERN};
 const vector<TOKEN_TYPE> first_decl_list = {BOOL_TOK, FLOAT_TOK, INT_TOK,
                                             VOID_TOK};
-const vector<TOKEN_TYPE> first_decl_listP = {BOOL_TOK, FLOAT_TOK, INT_TOK,
-                                             VOID_TOK};
 const vector<TOKEN_TYPE> first_decl = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK};
 const vector<TOKEN_TYPE> first_type_spec = {BOOL_TOK, FLOAT_TOK, INT_TOK,
                                             VOID_TOK};
 const vector<TOKEN_TYPE> first_var_type = {BOOL_TOK, FLOAT_TOK, INT_TOK};
 const vector<TOKEN_TYPE> first_params = {BOOL_TOK, FLOAT_TOK, INT_TOK,
                                          VOID_TOK};
-const vector<TOKEN_TYPE> first_param_list = {BOOL_TOK, FLOAT_TOK, INT_TOK};
-const vector<TOKEN_TYPE> first_param_listP = {COMMA};
-const vector<TOKEN_TYPE> first_param = {BOOL_TOK, FLOAT_TOK, INT_TOK};
 const vector<TOKEN_TYPE> first_block = {LBRA};
-const vector<TOKEN_TYPE> first_local_decls = {BOOL_TOK, FLOAT_TOK, INT_TOK};
-const vector<TOKEN_TYPE> first_local_declsP = {BOOL_TOK, FLOAT_TOK, INT_TOK};
 const vector<TOKEN_TYPE> first_local_decl = {BOOL_TOK, FLOAT_TOK, INT_TOK};
-const vector<TOKEN_TYPE> first_stmt_list = {
-    NOT,   LPAR, MINUS,    SC,        IF,    RETURN,
-    WHILE, LBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-const vector<TOKEN_TYPE> first_stmt_listP = {
-    NOT,   LPAR, MINUS,    SC,        IF,    RETURN,
-    WHILE, LBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
 const vector<TOKEN_TYPE> first_stmt = {NOT,      LPAR,      MINUS, SC,
                                        IF,       RETURN,    WHILE, LBRA,
                                        BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
@@ -875,58 +861,27 @@ const vector<TOKEN_TYPE> first_expr = {NOT,       LPAR,  MINUS,  BOOL_LIT,
                                        FLOAT_LIT, IDENT, INT_LIT};
 const vector<TOKEN_TYPE> first_logical_or = {NOT,       LPAR,  MINUS,  BOOL_LIT,
                                              FLOAT_LIT, IDENT, INT_LIT};
-const vector<TOKEN_TYPE> first_logical_orP = {OR};
-const vector<TOKEN_TYPE> first_logical_and = {
-    NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-const vector<TOKEN_TYPE> first_logical_andP = {AND};
-const vector<TOKEN_TYPE> first_equality = {NOT,       LPAR,  MINUS,  BOOL_LIT,
-                                           FLOAT_LIT, IDENT, INT_LIT};
-const vector<TOKEN_TYPE> first_equalityP = {EQ, NE};
-const vector<TOKEN_TYPE> first_relational = {NOT,       LPAR,  MINUS,  BOOL_LIT,
-                                             FLOAT_LIT, IDENT, INT_LIT};
-const vector<TOKEN_TYPE> first_relationalP = {LT, LE, GT, GE};
-const vector<TOKEN_TYPE> first_additive = {NOT,       LPAR,  MINUS,  BOOL_LIT,
-                                           FLOAT_LIT, IDENT, INT_LIT};
-const vector<TOKEN_TYPE> first_additiveP = {PLUS, MINUS};
-const vector<TOKEN_TYPE> first_multiplicative = {
-    NOT, LPAR, MINUS, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-const vector<TOKEN_TYPE> first_multiplicativeP = {MOD, ASTERIX, DIV};
 const vector<TOKEN_TYPE> first_factor = {LPAR, BOOL_LIT, FLOAT_LIT, IDENT,
                                          INT_LIT};
 const vector<TOKEN_TYPE> first_reference = {BOOL_LIT, FLOAT_LIT, IDENT,
                                             INT_LIT};
-const vector<TOKEN_TYPE> first_referenceP = {LPAR};
 const vector<TOKEN_TYPE> first_literal = {BOOL_LIT, FLOAT_LIT, INT_LIT};
 const vector<TOKEN_TYPE> first_args = {NOT,       LPAR,  MINUS,  BOOL_LIT,
                                        FLOAT_LIT, IDENT, INT_LIT};
-const vector<TOKEN_TYPE> first_arg_list = {NOT,       LPAR,  MINUS,  BOOL_LIT,
-                                           FLOAT_LIT, IDENT, INT_LIT};
-const vector<TOKEN_TYPE> first_arg_listP = {COMMA};
 
 // Follow sets of each production
 const vector<TOKEN_TYPE> follow_extern_listP = {BOOL_TOK, FLOAT_TOK, INT_TOK,
                                                 VOID_TOK};
-const vector<TOKEN_TYPE> follow_decl = {BOOL_TOK, FLOAT_TOK, INT_TOK, VOID_TOK,
-                                        EOF_TOK};
 const vector<TOKEN_TYPE> follow_decl_listP = {EOF_TOK};
 const vector<TOKEN_TYPE> follow_params = {RPAR};
 const vector<TOKEN_TYPE> follow_param_listP = {RPAR};
-const vector<TOKEN_TYPE> follow_local_decls = {
-    NOT,  LPAR, MINUS,    SC,        IF,    RETURN, WHILE,
-    LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
 const vector<TOKEN_TYPE> follow_local_declsP = {
     NOT,  LPAR, MINUS,    SC,        IF,    RETURN, WHILE,
     LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-const vector<TOKEN_TYPE> follow_stmt_list = {RBRA};
 const vector<TOKEN_TYPE> follow_stmt_listP = {RBRA};
-const vector<TOKEN_TYPE> follow_expr_stmt = {
-    NOT,  LPAR, MINUS,    SC,        IF,    RETURN, WHILE,
-    LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
 const vector<TOKEN_TYPE> follow_else_stmt = {
     NOT,  LPAR, MINUS,    SC,        IF,    RETURN, WHILE,
     LBRA, RBRA, BOOL_LIT, FLOAT_LIT, IDENT, INT_LIT};
-const vector<TOKEN_TYPE> follow_expr = {RPAR, COMMA, SC};
-const vector<TOKEN_TYPE> follow_logical_or = {RPAR, COMMA, SC};
 const vector<TOKEN_TYPE> follow_logical_orP = {RPAR, COMMA, SC};
 const vector<TOKEN_TYPE> follow_logical_andP = {RPAR, COMMA, SC, OR};
 const vector<TOKEN_TYPE> follow_equalityP = {AND, RPAR, COMMA, SC, OR};
@@ -1718,7 +1673,7 @@ p_extern_listP(vector<unique_ptr<PrototypeASTNode>> &extern_list) {
 // extern_list -> extern extern_list'
 vector<unique_ptr<PrototypeASTNode>> p_extern_list() {
   vector<unique_ptr<PrototypeASTNode>> extern_list;
-
+  
   return p_extern_listP(extern_list);
 }
 
