@@ -821,11 +821,9 @@ public:
       }
     }
 
-    if (!Decls.empty()) {
-      s += indentStr(indent) + BLU + "[Declarations]\e[0m\n";
-      for (const unique_ptr<ASTNode> &decl : Decls) {
-        s += decl->to_string(indent + 1);
-      }
+    s += indentStr(indent) + BLU + "[Declarations]\e[0m\n";
+    for (const unique_ptr<ASTNode> &decl : Decls) {
+      s += decl->to_string(indent + 1);
     }
 
     return s;
@@ -2048,13 +2046,36 @@ Value *UnaryASTNode::codegen() {
 
 Value *BinaryASTNode::codegen() {
   Value *lhs = LHS->codegen();
-  Value *rhs = RHS->codegen();
 
-  // Load variables if we can, but no need to load LHS if we are assigning to it
+  // No need to load LHS if we are assigning to it
   if (Op != ASSIGN) {
     lhs = loadIfVar(lhs);
+
+    // Boolean short circuiting for logical AND and OR
+    if (Op == AND) {
+      lhs = castToBool(lhs);
+      if (lhs == ConstantInt::get(TheContext, APInt(1, 0, false))) {
+        return lhs;
+      }
+    } else if (Op == OR) {
+      lhs = castToBool(lhs);
+      if (lhs == ConstantInt::get(TheContext, APInt(1, 1, false))) {
+        return lhs;
+      }
+    }
   }
+
+  Value *rhs = RHS->codegen();
   rhs = loadIfVar(rhs);
+
+  // Handle logical AND and OR, allow narrowing here
+  if (Op == AND) {
+    rhs = castToBool(rhs);
+    return Builder.CreateAnd(lhs, rhs, "andtmp");
+  } else if (Op == OR) {
+    rhs = castToBool(rhs);
+    return Builder.CreateOr(lhs, rhs, "ortmp");
+  }
 
   if (Op == ASSIGN) {
     if (AllocaInst *allocaInst = dyn_cast<AllocaInst>(lhs)) {
@@ -2064,7 +2085,9 @@ Value *BinaryASTNode::codegen() {
                   allocaInst->getName().str() + "'",
               Tok.lineNo, Tok.columnNo, true);
       }
-      return Builder.CreateStore(rhs, allocaInst);
+
+      Builder.CreateStore(rhs, allocaInst);
+      return rhs;
     } else if (GlobalVariable *globalVar = dyn_cast<GlobalVariable>(lhs)) {
       rhs = cast(rhs, globalVar->getValueType());
       if (!rhs) {
@@ -2072,21 +2095,12 @@ Value *BinaryASTNode::codegen() {
                   globalVar->getName().str() + "'",
               Tok.lineNo, Tok.columnNo, true);
       }
-      return Builder.CreateStore(rhs, globalVar);
+      
+      Builder.CreateStore(rhs, globalVar);
+      return rhs;
     } else {
       error("Invalid assignment target", Tok.lineNo, Tok.columnNo, true);
     }
-  }
-
-  // Handle logical AND and OR, allow narrowing here
-  if (Op == AND) {
-    lhs = castToBool(lhs);
-    rhs = castToBool(rhs);
-    return Builder.CreateAnd(lhs, rhs, "andtmp");
-  } else if (Op == OR) {
-    lhs = castToBool(lhs);
-    rhs = castToBool(rhs);
-    return Builder.CreateOr(lhs, rhs, "ortmp");
   }
 
   // Widen types of left and right hand side if necessary
@@ -2258,7 +2272,7 @@ Value *IfASTNode::codegen() {
     }
   }
 
-  // Emit merge block has predecessor from then and else blocks, emit it
+  // If any block branches to the merge, insert the merge block
   if (!mergeBB->hasNPredecessors(0)) {
     TheFunction->insert(TheFunction->end(), mergeBB);
     Builder.SetInsertPoint(mergeBB);
@@ -2379,7 +2393,7 @@ int main(int argc, char **argv) {
   // Run the parser now.
   unique_ptr<ProgramASTNode> program = parser();
   fprintf(stderr, "Parsing Finished\n");
-  program->to_string();
+  llvm::outs() << *program << "\n";
   program->codegen();
 
   //********************* Start printing final IR **************************

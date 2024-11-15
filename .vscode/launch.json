@@ -5,7 +5,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/mccomp",
-            "args": ["${workspaceFolder}/tests/unary2/unary2.c"],
+            "args": ["${workspaceFolder}/tests/assign/assign.c"],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
             "environment": [],

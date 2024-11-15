@@ -57,16 +57,16 @@ widening=1
 fail=1
 
 # hard tests (various (compiled by codethulu))
-assign=0
-associativity=0
-global=0
+assign=1
+associativity=1
+global=1
 infinite=0 # this infinitely loops, test manually
-lazyeval=0 # only turn on for boolean short-circuiting
-returns=0
-scope=0
+lazyeval=1 # only turn on for boolean short-circuiting
+returns=1
+scope=1
 unary2=0 # if you turn this on, you deserve what you get FAILED
-while2=0
-two_return=0
+while2=1
+two_return=1
 
 cd tests/addition/
 
